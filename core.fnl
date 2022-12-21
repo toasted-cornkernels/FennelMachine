@@ -8,7 +8,8 @@
         :merge     merge
         :reduce    reduce
         :split     split
-        :some      some} (require :lib.functional))
+        :some      some}
+       (require :lib.functional))
 (local atom (require :lib.atom))
 (require-macros :lib.macros)
 (require-macros :lib.advice.macros)
@@ -42,38 +43,22 @@ Shortcut for showing an alert on the primary screen for a specified duration
 Takes a message string, a style table, and the number of seconds to show alert
 Returns nil. This function causes side-effects.
 "
-(global alert
-        (afn
-         alert
-         [str style seconds]
-         "
-         Global alert function used for spacehammer modals and reload
-         alerts after config reloads
-         "
-         (hs.alert.show str
-                        style
-                        (hs.screen.primaryScreen)
-                        seconds)))
+(global alert (afn alert [str style seconds]
+                   (hs.alert.show str style (hs.screen.primaryScreen) seconds)))
 
 (global fw hs.window.focusedWindow)
 
 (global pprint (fn [x] (print (fennel.view x))))
 
 (global get-config
-        (afn get-config
-          []
-          "
-          Returns the global config object, or error if called early
-          "
-          (error "get-config can only be called after all modules have initialized")))
+        (afn get-config []
+             "Returns the global config object, or error if called early"
+             (error "get-config can only be called after all modules have initialized")))
 
-(fn file-exists?
-  [filepath]
-  "
-  Determine if a file exists and is readable.
-  Takes a file path string
-  Returns true if file is readable
-  "
+(fn file-exists? [filepath]
+  "Determine if a file exists and is readable.
+   Takes a file path string
+   Returns true if file is readable"
   (let [file (io.open filepath "r")]
     (when file
       (io.close file))
@@ -83,13 +68,10 @@ Returns nil. This function causes side-effects.
 ;; create custom config file if it doesn't exist
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(fn copy-file
-  [source dest]
-  "
-  Copies the contents of a source file to a destination file.
-  Takes a source file path and a destination file path.
-  Returns nil
-  "
+(fn copy-file [source dest]
+  "Copies the contents of a source file to a destination file.
+   Takes a source file path and a destination file path.
+   Returns nil"
   (let [default-config (io.open source "r")
         custom-config (io.open dest "a")]
     (each [line _ (: default-config :lines)]
@@ -101,60 +83,36 @@ Returns nil. This function causes side-effects.
 ;; auto reload config
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(fn source-filename?
-  [file]
-  "
-  Determine if a file is not an emacs backup file which starts with \".#\"
-  Takes a file path string
-  Returns true if it's a source file and not an emacs backup file.
-  "
-  (not (string.match file ".#")))
+(fn source-filename? [file]
+  (not (string.match file ".#")))       ; if starts with \".#\" then it's an emacs backup file
 
-(fn source-extension?
-  [file]
-  "
-  Determine if a file is a .fnl or .lua file
-  Takes a file string
-  Returns true if file extension ends in .fnl or .lua
-  "
+(fn source-extension? [file]
   (let [ext (split "%p" file)]
-    (and
-     (or (contains? "fnl" ext)
-         (contains? "lua" ext))
-     (not (string.match file "-test%..*$")))))
+    (and (or (contains? "fnl" ext)
+             (contains? "lua" ext))
+         (not (string.match file "-test%..*$")))))
 
 
-(fn source-updated?
-  [file]
-  "
-  Determine if a file is a valid source file that we can load
-  Takes a file string path
-  Returns true if file is not an emacs backup and is a .fnl or .lua type.
-  "
+(fn source-updated? [file]
+  "Determine if a file is a valid source file that we can load. Takes a
+  file string path. Returns true if file is not an emacs backup and is
+  a .fnl or .lua type."
   (and (source-filename? file)
        (source-extension? file)))
 
-(fn config-reloader
-  [files]
-  "
-  If the list of files contains some hammerspoon or spacehammer source files:
-  reload hammerspoon
-  Takes a list of files from our config file watcher.
-  Performs side effect of reloading hammerspoon.
-  Returns nil
-  "
+(fn config-reloader [files]
+  " If the list of files contains some hammerspoon or spacehammer source
+  files: reload hammerspoon Takes a list of files from our config file
+  watcher.  Performs side effect of reloading hammerspoon.  Returns
+  nil"
   (when (some source-updated? files)
     (hs.console.clearConsole)
     (hs.reload)))
 
-(fn watch-files
-  [dir]
-  "
-  Watches hammerspoon or spacehammer source files. When a file updates we reload
-  hammerspoon.
-  Takes a directory to watch.
-  Returns a function to stop the watcher.
-  "
+(fn watch-files [dir]
+  " Watches hammerspoon or spacehammer source files. When a file updates
+  we reload hammerspoon.  Takes a directory to watch.  Returns a
+  function to stop the watcher."
   (let [watcher (hs.pathwatcher.new dir config-reloader)]
     (: watcher :start)
     (fn []

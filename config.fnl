@@ -6,7 +6,7 @@
 (local vim (require :vim))
 
 (local {:concat concat
-        :logf logf} (require :lib.functional))
+        :logf   logf} (require :lib.functional))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; WARNING
@@ -71,18 +71,15 @@
 ;; Actions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(fn activator
-  [app-name]
-  "
-  A higher order function to activate a target app. It's useful for quickly
+(fn activator [app-name]
+  "A higher order function to activate a target app. It's useful for quickly
   binding a modal menu action or hotkey action to launch or focus on an app.
   Takes a string application name
   Returns a function to activate that app.
 
   Example:
   (local launch-emacs (activator \"Emacs\"))
-  (launch-emacs)
-  "
+  (launch-emacs)"
   (fn activate []
     (windows.activate-app app-name)))
 
@@ -96,10 +93,9 @@
 ;; and will not be overwritten by upstream changes when spacehammer is updated.
 (local music-app "Spotify")
 
-(local return
-       {:key :space
-        :title "Back"
-        :action :previous})
+(local return {:key    :space
+               :title  "Back"
+               :action :previous})
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

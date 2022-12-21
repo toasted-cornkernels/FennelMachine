@@ -1,30 +1,23 @@
 (local windows (require :windows))
 
-"
-Slack functions to make complex or less accessible features more vim like!
-"
+"Slack functions to make complex or less accessible features more vim like"
 
 ;; Utils
 
-(fn scroll-to-bottom
-  []
+(fn scroll-to-bottom []
   (windows.set-mouse-cursor-at :Slack)
   (hs.eventtap.scrollWheel [0 -20000] {}))
 
-(fn add-reaction
-  []
+(fn add-reaction []
   (hs.eventtap.keyStroke [:cmd :shift] "\\"))
 
-(fn prev-element
-  []
+(fn prev-element []
   (hs.eventtap.keyStroke [:shift] :f6))
 
-(fn next-element
-  []
+(fn next-element []
   (hs.eventtap.keyStroke nil :f6))
 
-(fn thread
-  []
+(fn thread []
   "
   Start a thread on the last message. It doesn't always work, because of
   stupid Slack App inconsistency with TabIndexes
@@ -33,8 +26,7 @@ Slack functions to make complex or less accessible features more vim like!
   (hs.eventtap.keyStroke [] :right)
   (hs.eventtap.keyStroke [] :space))
 
-(fn quick-switcher
-  []
+(fn quick-switcher []
   (windows.activate-app "/Applications/Slack.app")
   (let [app (hs.application.find :Slack)]
     (when app
@@ -44,49 +36,39 @@ Slack functions to make complex or less accessible features more vim like!
 
 ;; scroll to prev/next day
 
-(fn prev-day
-  []
+(fn prev-day []
   (hs.eventtap.keyStroke [:shift] :pageup))
 
-(fn next-day
-  []
+(fn next-day []
   (hs.eventtap.keyStroke [:shift] :pagedown))
 
 ;; Scrolling functions
 
-(fn scroll-slack
-  [dir]
+(fn scroll-slack [dir]
   (windows.set-mouse-cursor-at :Slack)
   (hs.eventtap.scrollWheel [0 dir] {}))
 
-(fn scroll-up
-  []
+(fn scroll-up []
   (scroll-slack 3))
 
-(fn scroll-down
-  []
+(fn scroll-down []
   (scroll-slack -3))
-
 
 ;; History
 
-(fn prev-history
-  []
+(fn prev-history []
   (hs.eventtap.keyStroke [:cmd] "["))
 
-(fn next-history
-  []
+(fn next-history []
   (hs.eventtap.keyStroke [:cmd] "]"))
 
 
 ;; Arrow keys
 
-(fn up
-  []
+(fn up []
   (hs.eventtap.keyStroke nil :up))
 
-(fn down
-  []
+(fn down []
   (hs.eventtap.keyStroke nil :down))
 
 {:add-reaction     add-reaction

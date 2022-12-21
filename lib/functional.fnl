@@ -4,14 +4,12 @@
 ;; Simple Utils
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(fn call-when
-  [f ...]
+(fn call-when [f ...]
   "Execute function if it is not nil."
   (when (and f (= (type f) :function))
     (f ...)))
 
-(fn compose
-  [...]
+(fn compose [...]
   (let [fs [...]
         total (length fs)]
     (fn [v]
@@ -21,36 +19,29 @@
           (set res (f res))))
       res)))
 
-(fn contains?
-  [x xs]
+(fn contains? [x xs]
   "Returns true if key is present in the given collection, otherwise returns false."
   (and xs (fu.contains xs x)))
 
-(fn find
-  [f tbl]
+(fn find [f tbl]
   "Execute a function across a table and return the first element where that function returns true."
   (fu.find tbl f))
 
-(fn get
-  [prop-name tbl]
+(fn get [prop-name tbl]
   (if tbl
       (. prop-name tbl)
       (fn [tbl]
         (. tbl prop-name))))
 
-(fn has-some?
-  [list]
+(fn has-some? [list]
   (and list (< 0 (length list))))
 
-(fn identity
-  [x] x)
+(fn identity [x] x)
 
-(fn join
-  [sep list]
+(fn join [sep list]
   (table.concat list sep))
 
-(fn first
-  [list]
+(fn first [list]
   (. list 1))
 
 (fn last
@@ -164,11 +155,11 @@
 (fn map
   [f tbl]
   (reduce
-    (fn [new-tbl v k]
-      (table.insert new-tbl (f v k))
-      new-tbl)
-    []
-    tbl))
+   (fn [new-tbl v k]
+     (table.insert new-tbl (f v k))
+     new-tbl)
+   []
+   tbl))
 
 (fn merge
   [...]
@@ -182,24 +173,24 @@
      tbls)))
 
 (fn filter
- [f tbl]
- (reduce
-  (fn [xs v k]
-   (when (f v k)
-    (table.insert xs v))
-   xs)
-  []
-  tbl))
+  [f tbl]
+  (reduce
+   (fn [xs v k]
+     (when (f v k)
+       (table.insert xs v))
+     xs)
+   []
+   tbl))
 
 (fn concat
- [...]
- (reduce
-  (fn [cat tbl]
-    (each [_ v (ipairs tbl)]
-      (table.insert cat v))
-    cat)
-  []
-  [...]))
+  [...]
+  (reduce
+   (fn [cat tbl]
+     (each [_ v (ipairs tbl)]
+       (table.insert cat v))
+     cat)
+   []
+   [...]))
 
 (fn some
   [f tbl]
