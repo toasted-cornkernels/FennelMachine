@@ -91,7 +91,7 @@
 ;; If you would like to customize this we recommend copying this file to
 ;; ~/.spacehammer/config.fnl. That will be used in place of the default
 ;; and will not be overwritten by upstream changes when spacehammer is updated.
-(local music-app "Spotify")
+(local music-app "Apple Music")
 
 (local return {:key    :space
                :title  "Back"
