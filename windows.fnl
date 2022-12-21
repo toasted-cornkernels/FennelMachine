@@ -20,9 +20,9 @@
 (global history {})
 
 (fn history.push [self]
-  "Append current window frame geometry to history. self refers to history table instance"
+  "Append current window frame geometry to history. self is the global history table instance"
   (let [win (hs.window.focusedWindow)
-        id (when win (win:id))
+        id  (when win (win:id))
         tbl (. self id)]
     (when win
       (if (= (type tbl) :nil)
@@ -32,9 +32,9 @@
               (table.insert tbl (win:frame))))))))
 
 (fn history.pop [self]
-  "Go back to previous window frame geometry in history. self refers to history table instance"
+  "Go back to previous window frame geometry in history. self is the history table instance"
   (let [win (hs.window.focusedWindow)
-        id (when win (win:id))
+        id  (when win (win:id))
         tbl (. self id)]
     (when (and win tbl)
       (let [el (table.remove tbl)
