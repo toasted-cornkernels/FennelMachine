@@ -13,9 +13,8 @@
         :reset! reset!} (require :lib.atom))
 (require-macros :lib.advice.macros)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; History
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; History ==========================================
+;; ==================================================
 
 (global history {})
 
@@ -49,9 +48,8 @@
 (fn undo []
   (: history :pop))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Shared Functions
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Shared Functions =================================
+;; ==================================================
 
 (fn highlight-active-window []
   "Draw a border around the active window for a short period to highlight"
@@ -124,12 +122,11 @@
       (. 2)
       (: :focus)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Jumping Windows
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Jumping Windows ==================================
+;; ==================================================
 
 (fn jump-window [arrow]
-  "Navigate to the window nearest the current active window For
+  "Navigate to the window nearest the current active window. For
   instance if you open up emacs to the left of a web browser, activate
   emacs, then run (jump-window :l) hammerspoon will move active focus
   to the browser.  Takes an arrow like :h :j :k :l to support vim key
@@ -161,10 +158,8 @@
                  (filter allowed-app?))]
     (hs.hints.windowHints wns nil true)))
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Movement\Resizing Constants
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Movement/Resizing Constants ======================
+;; ==================================================
 
 (local arrow-map
        {:k {:half [0  0  1 .5] :movement [  0 -20] :complement :h :resize "Shorter"}
@@ -179,10 +174,8 @@
         f (. hs.grid fn-name)]
     (f (hs.window.focusedWindow))))
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Resize window by half
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Resize window by half ============================
+;; ==================================================
 
 (fn rect [rct]
   "Change a window's rect geometry which includes x, y, width, and
@@ -213,9 +206,8 @@
   (resize-window-halve :j))
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Resize window by increments
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Resize window by increments ======================
+;; ==================================================
 
 (fn resize-by-increment [arrow]
   "Resize the active window by the next window increment Let's say we
@@ -249,9 +241,8 @@
 (fn resize-inc-right []
   (resize-by-increment :l))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Resize windows
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Resize windows ===================================
+;; ==================================================
 
 (fn resize-window [arrow]
   "Resizes a window against the grid specifed in config.fnl Takes an
@@ -273,17 +264,15 @@
 (fn resize-right []
   (resize-window :l))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Resize to grid preset
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Resize to grid preset ============================
+;; ==================================================
 
 (fn resize-to-grid [grid]
   (: history :push)
   (hs.grid.set (hs.window.focusedWindow) grid))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Move to screen directions
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Move to screen directions ========================
+;; ==================================================
 
 (fn move-to-screen [screen]
   "Moves current window onto given hs.screen instance"
@@ -315,9 +304,8 @@
 (local canvas (require :hs.canvas))
 (local screen-number-canvases (atom []))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Move to screen by number
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Move to screen by number =========================
+;; ==================================================
 
 (fn show-display-number [idx screen]
   "Shows a big number at the corner of hs.screen.
@@ -407,10 +395,8 @@
   (hide-display-numbers)
   menu)
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Initialization
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Initialization ===================================
+;; ==================================================
 
 (fn init [config]
   "Initializes the windows module
@@ -420,10 +406,8 @@
   (hs.grid.setMargins (or (get-in [:grid :margins] config) [0 0]))
   (hs.grid.setGrid (or (get-in [:grid :size] config) "3x2")))
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Exports
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Exports ==========================================
+;; ==================================================
 
 {: activate-app
  : center-window-frame
