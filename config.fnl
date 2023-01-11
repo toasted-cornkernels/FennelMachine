@@ -15,246 +15,266 @@
   (fn activate []
     (windows.activate-app app-name)))
 
-
 ;; General ==========================================
 ;; ==================================================
 
 (local music-app "Apple Music")
-(local return {:key    :space
-               :title  "Back"
-               :action :previous})
-
+(local register {:key    :space
+                 :title  "Back"
+                 :action :previous})
 
 ;; Windows ==========================================
 ;; ==================================================
 
-(local window-jumps
-       [{:mods [:cmd]
-         :key "hjkl"
-         :title "Jump"}
-        {:mods [:cmd]
-         :key :h
-         :action "windows:jump-window-left"
+(local window-jumps  
+       [{:mods       [:cmd]
+         :key        "hjkl"
+         :title      "Jump"}
+        {:mods       [:cmd]
+         :key        :h
+         :action     "windows:jump-window-left"
          :repeatable true}
-        {:mods [:cmd]
-         :key :j
-         :action "windows:jump-window-above"
+        {:mods       [:cmd]
+         :key        :j
+         :action     "windows:jump-window-above"
          :repeatable true}
-        {:mods [:cmd]
-         :key :k
-         :action "windows:jump-window-below"
+        {:mods       [:cmd]
+         :key        :k
+         :action     "windows:jump-window-below"
          :repeatable true}
-        {:mods [:cmd]
-         :key :l
-         :action "windows:jump-window-right"
+        {:mods       [:cmd]
+         :key        :l
+         :action     "windows:jump-window-right"
          :repeatable true}])
 
 (local window-halves
-       [{:key "hjkl"
-         :title "Halves"}
-        {:key :h
-         :action "windows:resize-half-left"
+       [{:key        "hjkl"
+         :title      "Halves"}
+        {:key        :h
+         :action     "windows:resize-half-left"
          :repeatable true}
-        {:key :j
-         :action "windows:resize-half-bottom"
+        {:key        :j
+         :action     "windows:resize-half-bottom"
          :repeatable true}
-        {:key :k
-         :action "windows:resize-half-top"
+        {:key        :k
+         :action     "windows:resize-half-top"
          :repeatable true}
-        {:key :l
-         :action "windows:resize-half-right"
+        {:key        :l
+         :action     "windows:resize-half-right"
          :repeatable true}])
 
 (local window-increments
-       [{:mods [:alt]
-         :key "hjkl"
-         :title "Increments"}
-        {:mods [:alt]
-         :key :h
-         :action "windows:resize-inc-left"
+       [{:mods       [:alt]
+         :key        "hjkl"
+         :title      "Increments"}
+        {:mods       [:alt]
+         :key        :h
+         :action     "windows:resize-inc-left"
          :repeatable true}
-        {:mods [:alt]
-         :key :j
-         :action "windows:resize-inc-bottom"
+        {:mods       [:alt]
+         :key        :j
+         :action     "windows:resize-inc-bottom"
          :repeatable true}
-        {:mods [:alt]
-         :key :k
-         :action "windows:resize-inc-top"
+        {:mods       [:alt]
+         :key        :k
+         :action     "windows:resize-inc-top"
          :repeatable true}
-        {:mods [:alt]
-         :key :l
-         :action "windows:resize-inc-right"
+        {:mods       [:alt]
+         :key        :l
+         :action     "windows:resize-inc-right"
          :repeatable true}])
 
 (local window-resize
-       [{:mods [:shift]
-         :key "hjkl"
-         :title "Resize"}
-        {:mods [:shift]
-         :key :h
-         :action "windows:resize-left"
+       [{:mods       [:shift]
+         :key        "hjkl"
+         :title      "Resize"}
+        {:mods       [:shift]
+         :key        :h
+         :action     "windows:resize-left"
          :repeatable true}
-        {:mods [:shift]
-         :key :j
-         :action "windows:resize-down"
+        {:mods       [:shift]
+         :key        :j
+         :action     "windows:resize-down"
          :repeatable true}
-        {:mods [:shift]
-         :key :k
-         :action "windows:resize-up"
+        {:mods       [:shift]
+         :key        :k
+         :action     "windows:resize-up"
          :repeatable true}
-        {:mods [:shift]
-         :key :l
-         :action "windows:resize-right"
+        {:mods       [:shift]
+         :key        :l
+         :action     "windows:resize-right"
          :repeatable true}])
 
 (local window-move-screens
-       [{:key "n, p"
-         :title "Move next\\previous screen"}
-        {:mods [:shift]
-         :key "n, p"
-         :title "Move up\\down screens"}
-        {:key :n
-         :action "windows:move-south"
+       [{:key        "n, p"
+         :title      "Move next\\previous screen"}
+        {:mods       [:shift]
+         :key        "n, p"
+         :title      "Move up\\down screens"}
+        {:key        :n
+         :action     "windows:move-south"
          :repeatable true}
-        {:key :p
-         :action "windows:move-north"
+        {:key        :p
+         :action     "windows:move-north"
          :repeatable true}
-        {:mods [:shift]
-         :key :n
-         :action "windows:move-west"
+        {:mods       [:shift]
+         :key        :n
+         :action     "windows:move-west"
          :repeatable true}
-        {:mods [:shift]
-         :key :p
-         :action "windows:move-east"
+        {:mods       [:shift]
+         :key        :p
+         :action     "windows:move-east"
          :repeatable true}])
 
 (local window-bindings
        (concat
-        [return
-         {:key :w
-          :title "Last Window"
+        [register
+         {:key    :w
+          :title  "Last Window"
           :action "windows:jump-to-last-window"}]
         window-jumps
         window-halves
         window-increments
         window-resize
         window-move-screens
-        [{:key :m
-          :title "Maximize"
+        [{:key    :m
+          :title  "Maximize"
           :action "windows:maximize-window-frame"}
-         {:key :c
-          :title "Center"
+         {:key    :c
+          :title  "Center"
           :action "windows:center-window-frame"}
-         {:key :g
-          :title "Grid"
+         {:key    :g
+          :title  "Grid"
           :action "windows:show-grid"}
-         {:key :u
-          :title "Undo"
+         {:key    :u
+          :title  "Undo"
           :action "windows:undo"}]))
 
 ;; Apps Menu ========================================
 ;; ==================================================
 
 (local app-bindings
-       [return
-        {:key :e
-         :title "Emacs"
+       [register
+        {:key    :e
+         :title  "Emacs"
          :action (activator "Emacs")}
-        {:key :f
-         :title "Safari"
+        {:key    :f
+         :title  "Safari"
          :action (activator "Safari")}
-        {:key :i
-         :title "iTerm"
-         :action (activator "iterm")}
-        {:key :s
-         :title "Slack"
+        {:key    :i
+         :title  "Terminal"
+         :action (activator "Terminal")}
+        {:key    :s
+         :title  "Slack"
          :action (activator "Slack")}
-        {:key :b
-         :title "Brave"
-         :action (activator "brave browser")}
-        {:key :m
-         :title music-app
+        {:key    :b
+         :title  "Brave"
+         :action (activator "Brave Browser")}
+        {:key    :m
+         :title  music-app
          :action (activator music-app)}])
 
 (local media-bindings
-       [return
-        {:key :s
-         :title "Play or Pause"
-         :action "multimedia:play-or-pause"}
-        {:key :h
-         :title "Prev Track"
-         :action "multimedia:prev-track"}
-        {:key :l
-         :title "Next Track"
-         :action "multimedia:next-track"}
-        {:key :j
-         :title "Volume Down"
-         :action "multimedia:volume-down"
+       [register
+        {:key        :h
+         :title      "Volume Down"
+         :action     "multimedia:volume-down"
          :repeatable true}
-        {:key :k
-         :title "Volume Up"
-         :action "multimedia:volume-up"
+        {:key        :j
+         :title      "Next Track"
+         :action     "multimedia:next-track"}
+        {:key        :k
+         :title      "Prev Track"
+         :action     "multimedia:prev-track"}
+        {:key        :l
+         :title      "Volume Up"
+         :action     "multimedia:volume-up"
          :repeatable true}
-        {:key :a
-         :title (.. "Launch " music-app)
-         :action (activator music-app)}])
+        {:key        :s
+         :title      "Play or Pause"
+         :action     "multimedia:play-or-pause"}
+        {:key        :a
+         :title      (.. "Launch " music-app)
+         :action     (activator music-app)}])
+
+(local brightness-bindings
+       [register
+        {:key        :h
+         :title      "Brightness Down"
+         :action     (fn [] (hs.brightness.set (- (hs.brightness.get) 1)))
+         :repeatable true}
+        {:key        :l
+         :title      "Brightness Up"
+         :action     (fn [] (hs.brightness.set (+ (hs.brightness.get) 2))) ; for a very weird reason
+         :repeatable true}])
+
+;; is controlling macbook keyboard illumination possible? .. WIP
+(local keyboard-bindings
+       [register
+        {:key        :h}
+        {:key        :l}])
 
 (local emacs-bindings
-       [return
-        {:key :c
-         :title "Capture"
+       [register
+        {:key    :c
+         :title  "Capture"
          :action (fn [] (emacs.capture))}
         {:key :z
-         :title "Note"
+         :title  "Note"
          :action (fn [] (emacs.note))}
-        {:key :v
-         :title "Split"
+        {:key    :v
+         :title  "Split"
          :action "emacs:vertical-split-with-emacs"}
         {:key :f
-         :title "Full Screen"
+         :title  "Full Screen"
          :action "emacs:full-screen"}])
-
 
 ;; Main Menu & Config ===============================
 ;; ==================================================
 
 (local menu-items
-       [{:key    :space
+       [{:key    "'"
+         :title  "Hammerspoon"
+         :action hs.toggleConsole} 
+        {:key    :space
          :title  "Alfred"
-         :action (activator "Alfred 4")}
-        {:key   :w
-         :title "Window"
-         :enter "windows:enter-window-menu"
-         :exit "windows:exit-window-menu"
-         :items window-bindings}
-        {:key   :a
-         :title "Apps"
-         :items app-bindings}
+         :action (activator "Alfred 5")}
+        {:key    :w
+         :title  "Window"
+         :enter  "windows:enter-window-menu"
+         :exit   "windows:exit-window-menu"
+         :items  window-bindings}
+        {:key    :a
+         :title  "Apps"
+         :items  app-bindings}
+        {:key    :b
+         :title  "Brightness"
+         :items  brightness-bindings}
         {:key    :j
          :title  "Jump"
          :action "windows:jump"}
-        {:key   :m
-         :title "Media"
-         :items media-bindings}
-        {:key   :x
-         :title "Emacs"
-         :items emacs-bindings}])
+        {:key    :m
+         :title  "Media"
+         :items  media-bindings}
+        {:key    :x
+         :title  "Emacs"
+         :items  emacs-bindings}])
 
-(local common-keys
-       [{:mods [:alt]
-         :key :space
+(local agnostic-keys
+       [{:mods   [:cmd]
+         :key    :space
          :action "lib.modal:activate-modal"}
-        ;; {:mods [:alt]
-        ;;  :key :n
-        ;;  :action "apps:next-app"}
-        ;; {:mods [:alt]
-        ;;  :key :p
-        ;;  :action "apps:prev-app"}
-        {:mods [:cmd :ctrl]
-         :key "`"
+        {:mods   [:cmd :ctrl]
+         :key    "`"
          :action hs.toggleConsole}
-        {:mods [:cmd :ctrl]
-         :key :o
+        {:mods   [:cmd :ctrl]
+         :key    "return"
+         :action (activator "Safari")}
+        {:mods   [:cmd :ctrl]
+         :key    "delete"
+         :action (activator "Brave")}
+        {:mods   [:cmd :ctrl]
+         :key    :o
          :action "emacs:edit-with-emacs"}])
 
 ;; App Specific Config ==============================
@@ -374,7 +394,7 @@
 (local config
        {:title "Main Menu"
         :items menu-items
-        :keys  common-keys
+        :keys  agnostic-keys
         :enter (fn [] (windows.hide-display-numbers))
         :exit  (fn [] (windows.hide-display-numbers))
         :apps  apps
