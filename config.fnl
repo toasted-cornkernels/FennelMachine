@@ -19,9 +19,9 @@
 ;; ==================================================
 
 (local music-app "Apple Music")
-(local register {:key    :space
-                 :title  "Back"
-                 :action :previous})
+(local back-key  {:key    :space
+                  :title  "Back"
+                  :action :previous})
 
 ;; Windows ==========================================
 ;; ==================================================
@@ -128,7 +128,7 @@
 
 (local window-bindings
        (concat
-        [register
+        [back-key
          {:key    :w
           :title  "Last Window"
           :action "windows:jump-to-last-window"}]
@@ -154,7 +154,7 @@
 ;; ==================================================
 
 (local app-bindings
-       [register
+       [back-key
         {:key    :e
          :title  "Emacs"
          :action (activator "Emacs")}
@@ -175,7 +175,7 @@
          :action (activator music-app)}])
 
 (local media-bindings
-       [register
+       [back-key
         {:key        :h
          :title      "Volume Down"
          :action     "multimedia:volume-down"
@@ -198,24 +198,24 @@
          :action     (activator music-app)}])
 
 (local brightness-bindings
-       [register
+       [back-key
         {:key        :h
          :title      "Brightness Down"
          :action     (fn [] (hs.brightness.set (- (hs.brightness.get) 1)))
          :repeatable true}
         {:key        :l
          :title      "Brightness Up"
-         :action     (fn [] (hs.brightness.set (+ (hs.brightness.get) 2))) ; for a very weird reason
+         :action     (fn [] (hs.brightness.set (+ (hs.brightness.get) 2))) ; it's for a very weird reason
          :repeatable true}])
 
 ;; is controlling macbook keyboard illumination possible? .. WIP
 (local keyboard-bindings
-       [register
+       [back-key
         {:key        :h}
         {:key        :l}])
 
 (local emacs-bindings
-       [register
+       [back-key
         {:key    :c
          :title  "Capture"
          :action (fn [] (emacs.capture))}
@@ -392,14 +392,17 @@
         slack-config])
 
 (local config
-       {:title "Main Menu"
-        :items menu-items
-        :keys  agnostic-keys
-        :enter (fn [] (windows.hide-display-numbers))
-        :exit  (fn [] (windows.hide-display-numbers))
-        :apps  apps
-        :hyper {:key :F18}
+       {:title   "Main Menu"
+        :items   menu-items
+        :keys    agnostic-keys
+        :enter   (fn [] (windows.hide-display-numbers))
+        :exit    (fn [] (windows.hide-display-numbers))
+        :apps    apps
+        :hyper   {:key :F18}
         :modules {:windows {:center-ratio "80:50"}}})
+
+;; nREPL server =====================================
+;; ==================================================
 
 (local repl (require :repl))
 (repl.run (repl.start))
