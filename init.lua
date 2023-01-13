@@ -20,4 +20,4 @@ vim
    :disableForApp('Emacs')
    :disableForApp('Terminal')
    :disableForApp('zoom.us')
-   :bindHotKeys({ enter = {{'option'}, '[' }})
+   :bindHotKeys({enter = {{'option'}, '[' }})
