@@ -1,12 +1,13 @@
 (require-macros :lib.macros)
 (require-macros :lib.advice.macros)
-(local windows (require :windows))
-(local emacs (require :emacs))
-(local slack (require :slack))
-(local vim (require :vim))
+(local windows  (require :windows))
+(local emacs    (require :emacs))
+(local slack    (require :slack))
+(local vim      (require :vim))
 
 (local {:concat concat
-        :logf   logf} (require :lib.functional))
+        :logf   logf}
+       (require :lib.functional))
 
 ;; Actions ==========================================
 ;; ==================================================
@@ -129,15 +130,15 @@
 (local window-bindings
        (concat
         [back-key
-         {:key    :w
+         window-jumps
+         window-halves
+         window-increments
+         window-resize
+         window-move-screens]
+        [{:key    :w
           :title  "Last Window"
-          :action "windows:jump-to-last-window"}]
-        window-jumps
-        window-halves
-        window-increments
-        window-resize
-        window-move-screens
-        [{:key    :m
+          :action "windows:jump-to-last-window"} 
+         {:key    :m
           :title  "Maximize"
           :action "windows:maximize-window-frame"}
          {:key    :c
@@ -166,25 +167,30 @@
         (make-app-binding "KakaoTalk" :k)
         (make-app-binding "Slack" :s)
         (make-app-binding "Calendar" :a)
-        (make-app-binding (if (hs.application.find "Chrome") "Chrome" "Brave Browser") :c)
+        (if (hs.application.find "Chrome")
+            (make-app-binding "Chrome" :c)
+            (make-app-binding "Brave Browser") :b)
         (make-app-binding "Zoom" :z)
-        (make-app-binding music-app :m)])
+        (make-app-binding "Mail" :m)
+        (make-app-binding music-app :p)])
 
 (local media-bindings
        [back-key
         {:key        :h
+         :title      "Prev Track"
+         :action     "multimedia:prev-track"
+         :repeatable true}
+        {:key        :j
          :title      "Volume Down"
          :action     "multimedia:volume-down"
          :repeatable true}
-        {:key        :j
-         :title      "Next Track"
-         :action     "multimedia:next-track"}
         {:key        :k
-         :title      "Prev Track"
-         :action     "multimedia:prev-track"}
-        {:key        :l
          :title      "Volume Up"
          :action     "multimedia:volume-up"
+         :repeatable true}
+        {:key        :l
+         :title      "Next Track"
+         :action     "multimedia:next-track"
          :repeatable true}
         {:key        :s
          :title      "Play or Pause"
