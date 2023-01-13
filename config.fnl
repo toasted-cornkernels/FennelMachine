@@ -11,7 +11,7 @@
 ;; Actions ==========================================
 ;; ==================================================
 
-(fn activator [app-name]
+(fn activate [app-name]
   (fn activate []
     (windows.activate-app app-name)))
 
@@ -153,26 +153,22 @@
 ;; Apps Menu ========================================
 ;; ==================================================
 
+(fn make-app-binding [app-name key]
+  {:key    key
+   :title  app-name
+   :action (activate app-name)})
+
 (local app-bindings
        [back-key
-        {:key    :e
-         :title  "Emacs"
-         :action (activator "Emacs")}
-        {:key    :f
-         :title  "Safari"
-         :action (activator "Safari")}
-        {:key    :i
-         :title  "Terminal"
-         :action (activator "Terminal")}
-        {:key    :s
-         :title  "Slack"
-         :action (activator "Slack")}
-        {:key    :b
-         :title  "Brave"
-         :action (activator "Brave Browser")}
-        {:key    :m
-         :title  music-app
-         :action (activator music-app)}])
+        (make-app-binding "Emacs" :e)
+        (make-app-binding "Safari" :f)
+        (make-app-binding "Terminal" :i)
+        (make-app-binding "KakaoTalk" :e)
+        (make-app-binding "Slack" :s)
+        (make-app-binding "Calendar" :a)
+        (make-app-binding (if (hs.application.find "Chrome") "Chrome" "Brave Browser") :c)
+        (make-app-binding "Zoom" :z)
+        (make-app-binding music-app :m)])
 
 (local media-bindings
        [back-key
@@ -195,7 +191,7 @@
          :action     "multimedia:play-or-pause"}
         {:key        :a
          :title      (.. "Launch " music-app)
-         :action     (activator music-app)}])
+         :action     (activate music-app)}])
 
 (local brightness-bindings
        [back-key
@@ -238,7 +234,7 @@
          :action hs.toggleConsole} 
         {:key    :space
          :title  "Alfred"
-         :action (activator "Alfred 5")}
+         :action (activate "Alfred 5")}
         {:key    :w
          :title  "Window"
          :enter  "windows:enter-window-menu"
@@ -269,10 +265,10 @@
          :action hs.toggleConsole}
         {:mods   [:cmd :ctrl]
          :key    "return"
-         :action (activator "Safari")}
+         :action (activate "Safari")}
         {:mods   [:cmd :ctrl]
          :key    "delete"
-         :action (activator "Brave")}
+         :action (activate "Brave")}
         {:mods   [:cmd :ctrl]
          :key    :o
          :action "emacs:edit-with-emacs"}])
