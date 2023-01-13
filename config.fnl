@@ -163,7 +163,7 @@
         (make-app-binding "Emacs" :e)
         (make-app-binding "Safari" :f)
         (make-app-binding "Terminal" :i)
-        (make-app-binding "KakaoTalk" :e)
+        (make-app-binding "KakaoTalk" :k)
         (make-app-binding "Slack" :s)
         (make-app-binding "Calendar" :a)
         (make-app-binding (if (hs.application.find "Chrome") "Chrome" "Brave Browser") :c)
