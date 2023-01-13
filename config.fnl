@@ -210,12 +210,6 @@
          :action     (fn [] (hs.brightness.set (+ (hs.brightness.get) 2))) ; it's for a very weird reason
          :repeatable true}])
 
-;; is controlling macbook keyboard illumination possible? .. WIP
-(local keyboard-bindings
-       [back-key
-        {:key        :h}
-        {:key        :l}])
-
 (local emacs-bindings
        [back-key
         {:key    :c

@@ -12,6 +12,7 @@ table.insert(package.loaders or package.searchers, fennel.searcher)
 require "core"
 
 local VimMode = hs.loadSpoon('VimMode')
+local vim = VimMode:new()
 
 vim
    :disableForApp('Code')
@@ -19,4 +20,4 @@ vim
    :disableForApp('Emacs')
    :disableForApp('Terminal')
    :disableForApp('zoom.us')
-   :bindHotKeys({enter = {{'option'}, '[' }})
+   :bindHotKeys({enter = {{'option'}, '['}})
