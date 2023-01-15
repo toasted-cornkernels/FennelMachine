@@ -27,7 +27,7 @@
 ;; Windows ==========================================
 ;; ==================================================
 
-(local window-jumps  
+(local window-jumps
        [{:mods       [:cmd]
          :key        "hjkl"
          :title      "Jump"}
@@ -137,7 +137,7 @@
          window-move-screens]
         [{:key    :w
           :title  "Last Window"
-          :action "windows:jump-to-last-window"} 
+          :action "windows:jump-to-last-window"}
          {:key    :m
           :title  "Maximize"
           :action "windows:maximize-window-frame"}
@@ -231,7 +231,7 @@
 (local menu-items
        [{:key    "'"
          :title  "Hammerspoon"
-         :action hs.toggleConsole} 
+         :action hs.toggleConsole}
         {:key    :space
          :title  "Alfred"
          :action (activate "Alfred 5")}
@@ -246,9 +246,6 @@
         {:key    :b
          :title  "Brightness"
          :items  brightness-bindings}
-        {:key    :j
-         :title  "Jump"
-         :action "windows:jump"}
         {:key    :m
          :title  "Media"
          :items  media-bindings}
@@ -277,15 +274,15 @@
 ;; ==================================================
 
 (local browser-keys
-       [{:mods [:cmd :shift]
-         :key :l
+       [{:mods   [:cmd :shift]
+         :key    :l
          :action "chrome:open-location"}
-        {:mods [:alt]
-         :key :k
+        {:mods   [:alt]
+         :key    :k
          :action "chrome:next-tab"
          :repeat true}
-        {:mods [:alt]
-         :key :j
+        {:mods   [:alt]
+         :key    :j
          :action "chrome:prev-tab"
          :repeat true}])
 
@@ -297,85 +294,85 @@
           :action "emacs:edit-with-emacs"}]))
 
 (local brave-config
-       {:key "Brave Browser"
-        :keys browser-keys
+       {:key   "Brave Browser"
+        :keys  browser-keys
         :items browser-items})
 
 (local chrome-config
-       {:key "Google Chrome"
-        :keys browser-keys
+       {:key   "Google Chrome"
+        :keys  browser-keys
         :items browser-items})
 
 (local firefox-config
-       {:key "Firefox"
-        :keys browser-keys
+       {:key   "Firefox"
+        :keys  browser-keys
         :items browser-items})
 
 (local emacs-config
-       {:key "Emacs"
-        :activate (fn [] (vim.disable))
+       {:key        "Emacs"
+        :activate   (fn [] (vim.disable))
         :deactivate (fn [] (vim.enable))
-        :launch "emacs:maximize"
-        :items []
-        :keys []})
+        :launch     "emacs:maximize"
+        :items      []
+        :keys       []})
 
 (local hammerspoon-config
-       {:key "Hammerspoon"
+       {:key   "Hammerspoon"
         :items (concat
                 menu-items
-                [{:key :r
+                [{:key    :r
                   :title "Reload Console"
                   :action hs.reload}
-                 {:key :c
+                 {:key    :c
                   :title "Clear Console"
                   :action hs.console.clearConsole}])
         :keys []})
 
 (local slack-config
        {:key "Slack"
-        :keys [{:mods [:cmd]
-                :key  :g
+        :keys [{:mods   [:cmd]
+                :key    :g
                 :action "slack:scroll-to-bottom"}
-               {:mods [:ctrl]
-                :key :r
+               {:mods   [:ctrl]
+                :key    :r
                 :action "slack:add-reaction"}
-               {:mods [:ctrl]
-                :key :h
+               {:mods   [:ctrl]
+                :key    :h
                 :action "slack:prev-element"}
-               {:mods [:ctrl]
-                :key :l
+               {:mods   [:ctrl]
+                :key    :l
                 :action "slack:next-element"}
-               {:mods [:ctrl]
-                :key :t
+               {:mods   [:ctrl]
+                :key    :t
                 :action "slack:thread"}
-               {:mods [:ctrl]
-                :key :p
+               {:mods   [:ctrl]
+                :key    :p
                 :action "slack:prev-day"}
-               {:mods [:ctrl]
-                :key :n
+               {:mods   [:ctrl]
+                :key    :n
                 :action "slack:next-day"}
-               {:mods [:ctrl]
-                :key :e
+               {:mods   [:ctrl]
+                :key    :e
                 :action "slack:scroll-up"
                 :repeat true}
-               {:mods [:ctrl]
-                :key :y
+               {:mods   [:ctrl]
+                :key    :y
                 :action "slack:scroll-down"
                 :repeat true}
-               {:mods [:ctrl]
-                :key :i
+               {:mods   [:ctrl]
+                :key    :i
                 :action "slack:next-history"
                 :repeat true}
-               {:mods [:ctrl]
-                :key :o
+               {:mods   [:ctrl]
+                :key    :o
                 :action "slack:prev-history"
                 :repeat true}
-               {:mods [:ctrl]
-                :key :j
+               {:mods   [:ctrl]
+                :key    :j
                 :action "slack:down"
                 :repeat true}
-               {:mods [:ctrl]
-                :key :k
+               {:mods   [:ctrl]
+                :key    :k
                 :action "slack:up"
                 :repeat true}]})
 
