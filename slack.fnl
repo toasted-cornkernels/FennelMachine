@@ -2,7 +2,8 @@
 
 "Slack functions to make complex or less accessible features more vim like"
 
-;; Utils
+;; Utils ============================================
+;; ==================================================
 
 (fn scroll-to-bottom []
   (windows.set-mouse-cursor-at :Slack)
@@ -18,10 +19,8 @@
   (hs.eventtap.keyStroke nil :f6))
 
 (fn thread []
-  "
-  Start a thread on the last message. It doesn't always work, because of
-  stupid Slack App inconsistency with TabIndexes
-  "
+  "Start a thread on the last message. It doesn't always work, because of
+   stupid Slack App inconsistency with TabIndexes"
   (hs.eventtap.keyStroke [:shift] :f6)
   (hs.eventtap.keyStroke [] :right)
   (hs.eventtap.keyStroke [] :space))
@@ -33,8 +32,8 @@
       (hs.eventtap.keyStroke [:cmd] :t)
       (: app :unhide))))
 
-
-;; scroll to prev/next day
+;; Scroll to prev/next day ==========================
+;; ==================================================
 
 (fn prev-day []
   (hs.eventtap.keyStroke [:shift] :pageup))
@@ -42,7 +41,8 @@
 (fn next-day []
   (hs.eventtap.keyStroke [:shift] :pagedown))
 
-;; Scrolling functions
+;; Scrolling functions ==============================
+;; ==================================================
 
 (fn scroll-slack [dir]
   (windows.set-mouse-cursor-at :Slack)
@@ -54,7 +54,8 @@
 (fn scroll-down []
   (scroll-slack -3))
 
-;; History
+;; History ==========================================
+;; ==================================================
 
 (fn prev-history []
   (hs.eventtap.keyStroke [:cmd] "["))
@@ -62,8 +63,8 @@
 (fn next-history []
   (hs.eventtap.keyStroke [:cmd] "]"))
 
-
-;; Arrow keys
+;; Arrow keys =======================================
+;; ==================================================
 
 (fn up []
   (hs.eventtap.keyStroke nil :up))
