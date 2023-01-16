@@ -4,6 +4,7 @@
 (local emacs (require :emacs))
 (local slack (require :slack))
 (local vim (require :vim))
+(local input-method (require :input-method))
 
 (local {: concat : logf} (require :lib.functional))
 
@@ -346,22 +347,6 @@
 
 (local repl (require :repl))
 (repl.run (repl.start))
-
-;; TEMP
-
-(global e (: (hs.eventtap.new [hs.eventtap.event.types.flagsChanged
-                               hs.eventtap.event.types.keyUp
-                               hs.eventtap.event.types.keyDown]
-                              (fn [ev]
-                                (let [raw-flags (band (. (. (ev:getRawEventData)
-                                                            :CGEventData)
-                                                         :flags)
-                                                      3758096127)]
-                                  (when (= raw-flags 1048592)
-                                    (match (hs.keycodes.currentLayout)
-                                      :U.S. (hs.keycodes.setMethod "2-Set Korean")
-                                      "2-Set Korean" (hs.keycodes.setLayout :U.S.))
-                                    (values true {}))))) :start))
 
 ;; Exports ==========================================
 ;; ==================================================
