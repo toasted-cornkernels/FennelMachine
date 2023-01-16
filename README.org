@@ -1,0 +1,7 @@
+* Hammerspoon
+
+This is an indispensable config that is based on the awesome [[https://github.com/agzam/spacehammer][SpaceHammer]].
+
+** Caveats
+
+When git-cloning, clone the submodules with ~git clone --recursive~.
