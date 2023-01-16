@@ -21,3 +21,5 @@ vim
    :disableForApp('Terminal')
    :disableForApp('zoom.us')
    :bindHotKeys({enter = {{'option'}, '['}})
+
+hs.loadSpoon('ControlEscape'):start()
