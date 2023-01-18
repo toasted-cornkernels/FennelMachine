@@ -168,6 +168,9 @@
                        {:key :s
                         :title "Play or Pause"
                         :action "multimedia:play-or-pause"}
+                       {:key :m
+                        :title "Mute"
+                        :action "multimedia:mute"}
                        {:key :a
                         :title (.. "Launch " music-app)
                         :action (activate music-app)}])
