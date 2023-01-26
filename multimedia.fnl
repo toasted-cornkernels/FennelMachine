@@ -27,8 +27,13 @@
  "Simulate pressing the volume down key"
  (m-key :sound_down))
 
+(fn mute []
+  "Simulate pressing the mute key"
+  (m-key :mute))
+
 {:play-or-pause play-or-pause
  :prev-track    prev-track
  :next-track    next-track
  :volume-up     volume-up
- :volume-down   volume-down}
+ :volume-down   volume-down
+ :mute          mute}

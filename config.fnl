@@ -141,8 +141,8 @@
                      (make-app-binding :KakaoTalk :k)
                      (make-app-binding :Slack :s)
                      (make-app-binding :Calendar :a)
-                     (if (hs.application.find :Chrome)
-                         (make-app-binding :Chrome :c)
+                     (if (hs.fs.displayName "/Applications/Google Chrome.app")
+                         (make-app-binding "Google Chrome" :c)
                          (make-app-binding "Brave Browser" :b))
                      (make-app-binding :Zoom :z)
                      (make-app-binding :Mail :m)
@@ -168,6 +168,9 @@
                        {:key :s
                         :title "Play or Pause"
                         :action "multimedia:play-or-pause"}
+                       {:key :m
+                        :title "Mute"
+                        :action "multimedia:mute"}
                        {:key :a
                         :title (.. "Launch " music-app)
                         :action (activate music-app)}])
