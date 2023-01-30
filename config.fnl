@@ -136,16 +136,18 @@
 
 (local app-bindings [back-key
                      (make-app-binding :Emacs :e)
-                     (make-app-binding :Safari :f)
+                     (make-app-binding :Finder :f)
                      (make-app-binding :Terminal :i)
                      (make-app-binding :KakaoTalk :k)
                      (make-app-binding :Slack :s)
                      (make-app-binding :Calendar :a)
-                     (if (hs.fs.displayName "/Applications/Google Chrome.app")
-                         (make-app-binding "Google Chrome" :c)
-                         (make-app-binding "Brave Browser" :b))
+                     (when (hs.fs.displayName  "/Applications/Google Chrome.app")
+                       (make-app-binding "Google Chrome" :c))
+                     (when (hs.fs.displayName "/Applications/Brave Browser.app")
+                       (make-app-binding "Brave Browser" :b))
                      (make-app-binding :Zoom :z)
                      (make-app-binding :Mail :m)
+                     (make-app-binding "Visual Studio Code" :v)
                      (make-app-binding music-app :p)])
 
 (local media-bindings [back-key
@@ -226,9 +228,6 @@
                        :key :space
                        :action "lib.modal:activate-modal"}
                       {:mods [:cmd :ctrl] :key "`" :action hs.toggleConsole}
-                      {:mods [:cmd :ctrl]
-                       :key :return
-                       :action (activate :Safari)}
                       {:mods [:cmd :ctrl]
                        :key :delete
                        :action (activate :Brave)}
