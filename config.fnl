@@ -135,21 +135,24 @@
 (fn app-binding [app-name key]
   {: key :title app-name :action (activate app-name)})
 
-(local app-bindings (concat [back-key
-                             (app-binding :Emacs :e)
-                             (app-binding :Finder :f)
-                             (app-binding :Terminal :i)
-                             (app-binding :KakaoTalk :k)
-                             (app-binding :Slack :s)
-                             (app-binding :Calendar :a)
-                             (app-binding :Zoom :z)
-                             (app-binding :Mail :m)
-                             (app-binding "Visual Studio Code" :v)
-                             (app-binding music-app :p)]
-                            [(when (hs.fs.displayName "/Applications/Google Chrome.app")
-                               (app-binding "Google Chrome" :c))]
-                            [(when (hs.fs.displayName "/Applications/Brave Browser.app")
-                               (app-binding "Brave Browser" :b))])) ; I don't know why but it should be done like this
+(local app-bindings
+       (concat [back-key
+                (app-binding :Emacs :e)
+                (app-binding :Finder :f)
+                (app-binding :Terminal :i)
+                (app-binding :KakaoTalk :k)
+                (app-binding :Slack :s)
+                (app-binding :Calendar :a)
+                (app-binding :Zoom :z)
+                (app-binding :Mail :m)
+                (app-binding "Visual Studio Code" :v)
+                (app-binding music-app :p)]
+               [(when (hs.fs.displayName "/Applications/Google Chrome.app")
+                  (app-binding "Google Chrome" :c))]
+               [(when (hs.fs.displayName "/Applications/Brave Browser.app")
+                  (app-binding "Brave Browser" :b))]))
+
+; I don't know why but it should be done like this
 
 (local media-bindings [back-key
                        {:key :h
@@ -171,9 +174,7 @@
                        {:key :s
                         :title "Play or Pause"
                         :action "multimedia:play-or-pause"}
-                       {:key :m
-                        :title "Mute"
-                        :action "multimedia:mute"}
+                       {:key :m :title :Mute :action "multimedia:mute"}
                        {:key :a
                         :title (.. "Launch " music-app)
                         :action (activate music-app)}])
@@ -194,23 +195,20 @@
                         :title "Full Screen"
                         :action "emacs:full-screen"}])
 
-(local display-bindings [back-key
-                         {:key :h
-                             :title "Brightness Down"
-                             :action (fn []
-                                       (hs.brightness.set (- (hs.brightness.get)
-                                                             1)))
-                             :repeatable true}
-                            {:key :l
-                             :title "Brightness Up"
-                             :action (fn []
-                                       (hs.brightness.set (+ (hs.brightness.get)
-                                                             2)))
-                                        ; it's for a very weird reason
-                             :repeatable true}
-                         {:key :t
-                          :title "Toggle Dark Mode"
-                          :action "display:toggle-dark-mode"}])
+(local display-bindings
+       [back-key
+        {:key :h
+         :title "Brightness Down"
+         :action (fn []
+                   (hs.brightness.set (- (hs.brightness.get) 1)))
+         :repeatable true}
+        {:key :l
+         :title "Brightness Up"
+         :action (fn []
+                   (hs.brightness.set (+ (hs.brightness.get) 2)))
+         ; it's for a very weird reason
+         :repeatable true}
+        {:key :t :title "Toggle Dark Mode" :action "display:toggle-dark-mode"}])
 
 ;; Main Menu & Config ===============================
 ;; ==================================================
@@ -227,7 +225,6 @@
         {:key :m :title :Media :items media-bindings}
         {:key :x :title :Emacs :items emacs-bindings}
         {:key :d :title :Display :items display-bindings}])
-
 
 (local agnostic-keys [{:mods [:cmd]
                        :key :space
@@ -359,3 +356,4 @@
 ;; ==================================================
 
 config
+
