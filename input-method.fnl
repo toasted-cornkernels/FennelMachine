@@ -11,14 +11,15 @@
                                                  (local key-code (e:getKeyCode))
                                                  (if (= key-code 54)
                                                      (match (hs.keycodes.currentLayout)
-                                                       :U.S. (if (= current-app-name :Emacs)
-                                                                 (hs.eventtap.keyStroke {} :f6)
+                                                       :U.S. (if (= current-app-name
+                                                                    :Emacs)
+                                                                 (hs.eventtap.keyStroke {}
+                                                                                        :f6)
                                                                  (hs.keycodes.setMethod "2-Set Korean"))
                                                        "2-Set Korean" (if (= current-app-name
                                                                              :Emacs)
                                                                           (hs.eventtap.keyStroke {}
                                                                                                  :f6)
-                                                                          (hs.keycodes.setLayout :U.S.)))
-                                                     )))))
+                                                                          (hs.keycodes.setLayout :U.S.))))))))
                           :start))
 
