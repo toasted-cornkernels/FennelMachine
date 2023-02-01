@@ -131,24 +131,24 @@
 ;; Apps Menu ========================================
 ;; ==================================================
 
-(fn make-app-binding [app-name key]
+(fn app-binding [app-name key]
   {: key :title app-name :action (activate app-name)})
 
 (local app-bindings [back-key
-                     (make-app-binding :Emacs :e)
-                     (make-app-binding :Finder :f)
-                     (make-app-binding :Terminal :i)
-                     (make-app-binding :KakaoTalk :k)
-                     (make-app-binding :Slack :s)
-                     (make-app-binding :Calendar :a)
-                     (when (hs.fs.displayName  "/Applications/Google Chrome.app")
-                       (make-app-binding "Google Chrome" :c))
+                     (app-binding :Emacs :e)
+                     (app-binding :Finder :f)
+                     (app-binding :Terminal :i)
+                     (app-binding :KakaoTalk :k)
+                     (app-binding :Slack :s)
+                     (app-binding :Calendar :a)
+                     (when (hs.fs.displayName "/Applications/Google Chrome.app")
+                       (app-binding "Google Chrome" :c))
                      (when (hs.fs.displayName "/Applications/Brave Browser.app")
-                       (make-app-binding "Brave Browser" :b))
-                     (make-app-binding :Zoom :z)
-                     (make-app-binding :Mail :m)
-                     (make-app-binding "Visual Studio Code" :v)
-                     (make-app-binding music-app :p)])
+                       (app-binding "Brave Browser" :b))
+                     (app-binding :Zoom :z)
+                     (app-binding :Mail :m)
+                     (app-binding "Visual Studio Code" :v)
+                     (app-binding music-app :p)])
 
 (local media-bindings [back-key
                        {:key :h

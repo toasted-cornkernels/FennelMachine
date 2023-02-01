@@ -8,7 +8,6 @@
                                                       3758096127)
                                       cmd? (. (event:getFlags) :cmd)
                                       current-app-name (: (hs.application.frontmostApplication) :name)]
-                                  ;; (hs.alert cmd?)
                                   (when (= raw-flags 1048592)
                                     (match (hs.keycodes.currentLayout)
                                       :U.S. (if (= current-app-name "Emacs")
