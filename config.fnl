@@ -5,6 +5,7 @@
 (local slack (require :slack))
 (local vim (require :vim))
 (local input-method (require :input-method))
+(local display (require :display))
 
 (local {: concat : logf} (require :lib.functional))
 
@@ -177,21 +178,6 @@
                         :title (.. "Launch " music-app)
                         :action (activate music-app)}])
 
-(local brightness-bindings [back-key
-                            {:key :h
-                             :title "Brightness Down"
-                             :action (fn []
-                                       (hs.brightness.set (- (hs.brightness.get)
-                                                             1)))
-                             :repeatable true}
-                            {:key :l
-                             :title "Brightness Up"
-                             :action (fn []
-                                       (hs.brightness.set (+ (hs.brightness.get)
-                                                             2)))
-                             ; it's for a very weird reason
-                             :repeatable true}])
-
 (local emacs-bindings [back-key
                        {:key :c
                         :title :Capture
@@ -208,6 +194,24 @@
                         :title "Full Screen"
                         :action "emacs:full-screen"}])
 
+(local display-bindings [back-key
+                         {:key :h
+                             :title "Brightness Down"
+                             :action (fn []
+                                       (hs.brightness.set (- (hs.brightness.get)
+                                                             1)))
+                             :repeatable true}
+                            {:key :l
+                             :title "Brightness Up"
+                             :action (fn []
+                                       (hs.brightness.set (+ (hs.brightness.get)
+                                                             2)))
+                                        ; it's for a very weird reason
+                             :repeatable true}
+                         {:key :t
+                          :title "Toggle Dark Mode"
+                          :action "display:toggle-dark-mode"}])
+
 ;; Main Menu & Config ===============================
 ;; ==================================================
 
@@ -220,9 +224,10 @@
          :exit "windows:exit-window-menu"
          :items window-bindings}
         {:key :a :title :Apps :items app-bindings}
-        {:key :b :title :Brightness :items brightness-bindings}
         {:key :m :title :Media :items media-bindings}
-        {:key :x :title :Emacs :items emacs-bindings}])
+        {:key :x :title :Emacs :items emacs-bindings}
+        {:key :d :title :Display :items display-bindings}])
+
 
 (local agnostic-keys [{:mods [:cmd]
                        :key :space
