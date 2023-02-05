@@ -25,109 +25,99 @@
 ;; Windows ==========================================
 ;; ==================================================
 
-(local window-jumps [{:mods [:cmd] :key :hjkl :title :Jump}
-                     {:mods [:cmd]
-                      :key :h
-                      :action "windows:jump-window-left"
-                      :repeatable true}
-                     {:mods [:cmd]
-                      :key :j
-                      :action "windows:jump-window-above"
-                      :repeatable true}
-                     {:mods [:cmd]
-                      :key :k
-                      :action "windows:jump-window-below"
-                      :repeatable true}
-                     {:mods [:cmd]
-                      :key :l
-                      :action "windows:jump-window-right"
-                      :repeatable true}])
-
-(local window-halves [{:key :hjkl :title :Halves}
-                      {:key :h
-                       :action "windows:resize-half-left"
-                       :repeatable true}
-                      {:key :j
-                       :action "windows:resize-half-bottom"
-                       :repeatable true}
-                      {:key :k
-                       :action "windows:resize-half-top"
-                       :repeatable true}
-                      {:key :l
-                       :action "windows:resize-half-right"
-                       :repeatable true}])
-
-(local window-increments [{:mods [:alt] :key :hjkl :title :Increments}
-                          {:mods [:alt]
-                           :key :h
-                           :action "windows:resize-inc-left"
-                           :repeatable true}
-                          {:mods [:alt]
-                           :key :j
-                           :action "windows:resize-inc-bottom"
-                           :repeatable true}
-                          {:mods [:alt]
-                           :key :k
-                           :action "windows:resize-inc-top"
-                           :repeatable true}
-                          {:mods [:alt]
-                           :key :l
-                           :action "windows:resize-inc-right"
-                           :repeatable true}])
-
-(local window-resize [{:mods [:shift] :key :hjkl :title :Resize}
-                      {:mods [:shift]
-                       :key :h
-                       :action "windows:resize-left"
-                       :repeatable true}
-                      {:mods [:shift]
-                       :key :j
-                       :action "windows:resize-down"
-                       :repeatable true}
-                      {:mods [:shift]
-                       :key :k
-                       :action "windows:resize-up"
-                       :repeatable true}
-                      {:mods [:shift]
-                       :key :l
-                       :action "windows:resize-right"
-                       :repeatable true}])
-
-(local window-move-screens [{:key "n, p" :title "Move next\\previous screen"}
-                            {:mods [:shift]
-                             :key "n, p"
-                             :title "Move up\\down screens"}
-                            {:key :n
-                             :action "windows:move-south"
-                             :repeatable true}
-                            {:key :p
-                             :action "windows:move-north"
-                             :repeatable true}
-                            {:mods [:shift]
-                             :key :n
-                             :action "windows:move-west"
-                             :repeatable true}
-                            {:mods [:shift]
-                             :key :p
-                             :action "windows:move-east"
-                             :repeatable true}])
-
 (local window-bindings
-       (concat [back-key
-                window-jumps
-                window-halves
-                window-increments
-                window-resize
-                window-move-screens]
-               [{:key :w
-                 :title "Last Window"
-                 :action "windows:jump-to-last-window"}
-                {:key :m
-                 :title :Maximize
-                 :action "windows:maximize-window-frame"}
-                {:key :c :title :Center :action "windows:center-window-frame"}
-                {:key :g :title :Grid :action "windows:show-grid"}
-                {:key :u :title :Undo :action "windows:undo"}]))
+       [back-key
+        {:key "n, p" :title "Move next/previous screen"}
+        {:mods [:shift]
+         :key "n, p"
+         :title "Move up/down screens"}
+        {:key :n
+         :action "windows:move-south"
+         :repeatable true}
+        {:key :p
+         :action "windows:move-north"
+         :repeatable true}
+        {:mods [:shift]
+         :key :n
+         :action "windows:move-west"
+         :repeatable true}
+        {:mods [:shift]
+         :key :p
+         :action "windows:move-east"
+         :repeatable true}
+        {:mods [:shift] :key :hjkl :title :Resize}
+        {:mods [:shift]
+         :key :h
+         :action "windows:resize-left"
+         :repeatable true}
+        {:mods [:shift]
+         :key :j
+         :action "windows:resize-down"
+         :repeatable true}
+        {:mods [:shift]
+         :key :k
+         :action "windows:resize-up"
+         :repeatable true}
+        {:mods [:shift]
+         :key :l
+         :action "windows:resize-right"
+         :repeatable true}
+        {:mods [:alt] :key :hjkl :title :Increments}
+        {:mods [:alt]
+         :key :h
+         :action "windows:resize-inc-left"
+         :repeatable true}
+        {:mods [:alt]
+         :key :j
+         :action "windows:resize-inc-bottom"
+         :repeatable true}
+        {:mods [:alt]
+         :key :k
+         :action "windows:resize-inc-top"
+         :repeatable true}
+        {:mods [:alt]
+         :key :l
+         :action "windows:resize-inc-right"
+         :repeatable true}
+        {:key :hjkl :title :Halves}
+        {:key :h
+         :action "windows:resize-half-left"
+         :repeatable true}
+        {:key :j
+         :action "windows:resize-half-bottom"
+         :repeatable true}
+        {:key :k
+         :action "windows:resize-half-top"
+         :repeatable true}
+        {:key :l
+         :action "windows:resize-half-right"
+         :repeatable true}
+        {:mods [:cmd] :key :hjkl :title :Jump}
+        {:mods [:cmd]
+         :key :h
+         :action "windows:jump-window-left"
+         :repeatable true}
+        {:mods [:cmd]
+         :key :j
+         :action "windows:jump-window-above"
+         :repeatable true}
+        {:mods [:cmd]
+         :key :k
+         :action "windows:jump-window-below"
+         :repeatable true}
+        {:mods [:cmd]
+         :key :l
+         :action "windows:jump-window-right"
+         :repeatable true}
+        {:key :w
+         :title "Last Window"
+         :action "windows:jump-to-last-window"}
+        {:key :m
+         :title :Maximize
+         :action "windows:maximize-window-frame"}
+        {:key :c :title :Center :action "windows:center-window-frame"}
+        {:key :g :title :Grid :action "windows:show-grid"}
+        {:key :u :title :Undo :action "windows:undo"}])
 
 ;; Apps Menu ========================================
 ;; ==================================================
