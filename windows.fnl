@@ -48,6 +48,78 @@
 (fn undo []
   (: history :pop))
 
+;; My Addition!! ====================================
+;; ==================================================
+
+(fn resize-border-up []
+  (let [window (hs.window.focusedWindow) 
+        window-frame (window:frame)
+        screen-frame (: (window:screen) :frame)]
+    (set window-frame.y (- window-frame.y 10))
+    (set window-frame.h (+ window-frame.h 10))
+    (window:setFrame window-frame)))
+
+(fn resize-border-down []
+  (let [window (hs.window.focusedWindow) 
+        window-frame (window:frame)
+        screen-frame (: (window:screen) :frame)]
+    (set window-frame.h (+ window-frame.h 10))
+    (window:setFrame window-frame)))
+
+(fn resize-border-left []
+  (let [window (hs.window.focusedWindow)
+        window-frame (window:frame)
+        screen-frame (: (window:screen) :frame)]
+    (set window-frame.x (- window-frame.x 10))
+    (set window-frame.w (+ window-frame.w 10))
+    (window:setFrame window-frame)))
+
+(fn resize-border-right []
+  (let [window (hs.window.focusedWindow)
+        window-frame (window:frame)
+        screen-frame (: (window:screen) :frame)]
+    (set window-frame.w (+ window-frame.w 10))
+    (window:setFrame window-frame)))
+
+(fn move-up []
+  (let [window (hs.window.focusedWindow)
+        window-frame (window:frame)
+        screen-frame (: (window:screen) :frame)]
+    (set window-frame.y (- window-frame.y 10))
+    (window:setFrame window-frame)))
+
+(fn move-down []
+  (let [window (hs.window.focusedWindow)
+        window-frame (window:frame)
+        screen-frame (: (window:screen) :frame)]
+    (set window-frame.y (+ window-frame.y 10))
+    (window:setFrame window-frame)))
+
+(fn move-left []
+  (let [window (hs.window.focusedWindow)
+        window-frame (window:frame)
+        screen-frame (: (window:screen) :frame)]
+    (set window-frame.x (- window-frame.x 10))
+    (window:setFrame window-frame)))
+
+(fn move-right []
+  (let [window (hs.window.focusedWindow)
+        window-frame (window:frame)
+        screen-frame (: (window:screen) :frame)]
+    (set window-frame.x (+ window-frame.x 10))
+    (window:setFrame window-frame)))
+
+(fn center-enlarge-with-rate []
+  (let [window (hs.window.focusedWindow)
+        window-frame (window:frame)
+        screen-frame (: (window:screen) :frame)
+        rate 0.8]
+    (set window-frame.x (* (* screen-frame.w (- 1 rate)) 0.5))
+    (set window-frame.y (* (* screen-frame.h (- 1 rate)) 0.5))
+    (set window-frame.w (* screen-frame.w rate))
+    (set window-frame.h (* screen-frame.h rate))
+    (window:setFrame window-frame)))
+
 ;; Shared Functions =================================
 ;; ==================================================
 
@@ -443,6 +515,19 @@
  : resize-right
  : resize-up
  : resize-to-grid
+
+ : resize-border-up
+ : resize-border-down
+ : resize-border-left
+ : resize-border-right
+
+ : move-up
+ : move-down
+ : move-left
+ : move-right
+
+ : center-enlarge-with-rate
+ 
  : set-mouse-cursor-at
  : show-display-numbers
  : show-grid
