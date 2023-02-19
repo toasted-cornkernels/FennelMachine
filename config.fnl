@@ -27,95 +27,45 @@
 
 (local window-bindings
        [back-key
-        {:key "n, p" :title "Move next/previous screen"}
-        {:mods [:shift]
-         :key "n, p"
-         :title "Move up/down screens"}
-        {:key :n
-         :action "windows:move-south"
-         :repeatable true}
-        {:key :p
-         :action "windows:move-north"
-         :repeatable true}
-        {:mods [:shift]
-         :key :n
-         :action "windows:move-west"
-         :repeatable true}
-        {:mods [:shift]
-         :key :p
-         :action "windows:move-east"
-         :repeatable true}
-        {:mods [:shift] :key :hjkl :title :Resize}
-        {:mods [:shift]
-         :key :h
-         :action "windows:resize-left"
-         :repeatable true}
-        {:mods [:shift]
-         :key :j
-         :action "windows:resize-down"
-         :repeatable true}
-        {:mods [:shift]
-         :key :k
-         :action "windows:resize-up"
-         :repeatable true}
-        {:mods [:shift]
-         :key :l
-         :action "windows:resize-right"
-         :repeatable true}
-        {:mods [:alt] :key :hjkl :title :Increments}
-        {:mods [:alt]
-         :key :h
-         :action "windows:resize-inc-left"
-         :repeatable true}
-        {:mods [:alt]
-         :key :j
-         :action "windows:resize-inc-bottom"
-         :repeatable true}
-        {:mods [:alt]
-         :key :k
-         :action "windows:resize-inc-top"
-         :repeatable true}
-        {:mods [:alt]
-         :key :l
-         :action "windows:resize-inc-right"
-         :repeatable true}
-        {:key :hjkl :title :Halves}
+        {:key :hjkl :title :Move}
         {:key :h
-         :action "windows:resize-half-left"
+         :action "windows:move-left"
          :repeatable true}
         {:key :j
-         :action "windows:resize-half-bottom"
+         :action "windows:move-down"
          :repeatable true}
         {:key :k
-         :action "windows:resize-half-top"
+         :action "windows:move-up"
          :repeatable true}
         {:key :l
-         :action "windows:resize-half-right"
+         :action "windows:move-right"
          :repeatable true}
-        {:mods [:cmd] :key :hjkl :title :Jump}
+        
+        {:mods [:cmd] :key :hjkl :title :Resize}
         {:mods [:cmd]
          :key :h
-         :action "windows:jump-window-left"
+         :action "windows:resize-border-left"
          :repeatable true}
         {:mods [:cmd]
          :key :j
-         :action "windows:jump-window-above"
+         :action "windows:resize-border-down"
          :repeatable true}
         {:mods [:cmd]
          :key :k
-         :action "windows:jump-window-below"
+         :action "windows:resize-border-up"
          :repeatable true}
         {:mods [:cmd]
          :key :l
-         :action "windows:jump-window-right"
+         :action "windows:resize-border-right"
          :repeatable true}
+        
         {:key :w
          :title "Last Window"
          :action "windows:jump-to-last-window"}
         {:key :m
          :title :Maximize
          :action "windows:maximize-window-frame"}
-        {:key :c :title :Center :action "windows:center-window-frame"}
+        {:key :c :title :Center :action "windows:center-enlarge-with-rate"}
         {:key :g :title :Grid :action "windows:show-grid"}
         {:key :u :title :Undo :action "windows:undo"}])
 
