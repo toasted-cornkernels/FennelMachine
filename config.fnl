@@ -6,8 +6,7 @@
 (local vim (require :vim))
 (local input-method (require :input-method))
 (local display (require :display))
-
-(local {: concat : logf} (require :lib.functional))
+(local {: concat : logf : filter : identity} (require :lib.functional))
 
 ;; Actions ==========================================
 ;; ==================================================
@@ -28,19 +27,10 @@
 (local window-bindings
        [back-key
         {:key :hjkl :title :Move}
-        {:key :h
-         :action "windows:move-left"
-         :repeatable true}
-        {:key :j
-         :action "windows:move-down"
-         :repeatable true}
-        {:key :k
-         :action "windows:move-up"
-         :repeatable true}
-        {:key :l
-         :action "windows:move-right"
-         :repeatable true}
-        
+        {:key :h :action "windows:move-left" :repeatable true}
+        {:key :j :action "windows:move-down" :repeatable true}
+        {:key :k :action "windows:move-up" :repeatable true}
+        {:key :l :action "windows:move-right" :repeatable true}
         {:mods [:cmd] :key :hjkl :title :Resize}
         {:mods [:cmd]
          :key :h
@@ -58,13 +48,8 @@
          :key :l
          :action "windows:resize-border-right"
          :repeatable true}
-        
-        {:key :w
-         :title "Last Window"
-         :action "windows:jump-to-last-window"}
-        {:key :m
-         :title :Maximize
-         :action "windows:maximize-window-frame"}
+        {:key :w :title "Last Window" :action "windows:jump-to-last-window"}
+        {:key :m :title :Maximize :action "windows:maximize-window-frame"}
         {:key :c :title :Center :action "windows:center-enlarge-with-rate"}
         {:key :g :title :Grid :action "windows:show-grid"}
         {:key :u :title :Undo :action "windows:undo"}])
@@ -76,22 +61,24 @@
   {: key :title app-name :action (activate app-name)})
 
 (fn app-binding-if-exists [app-name key]
-  (when (hs.fs.displayName (.. "/Applications/" app-name ".app"))
+  (when (hs.fs.displayName (.. :/Applications/ app-name :.app))
     {: key :title app-name :action (activate app-name)}))
 
-(local app-bindings (concat [back-key
-                             (app-binding :Emacs :e)
-                             (app-binding :Finder :f)
-                             (app-binding :Terminal :i)
-                             (app-binding :Slack :s)
-                             (app-binding :Calendar :a)
-                             (app-binding :Zoom :z)
-                             (app-binding :Mail :m)
-                             (app-binding "Visual Studio Code" :v)
-                             (app-binding music-app :p)
-                             (app-binding-if-exists :KakaoTalk :k)
-                             (app-binding-if-exists "Google Chrome" :c)
-                             (app-binding-if-exists "Brave Browser" :b)]))
+(local app-bindings
+       (filter identity
+               [back-key
+                (app-binding :Emacs :e)
+                (app-binding :Finder :f)
+                (app-binding :Terminal :i)
+                (app-binding :Slack :s)
+                (app-binding :Calendar :a)
+                (app-binding :Zoom :z)
+                (app-binding :Mail :m)
+                (app-binding music-app :p)
+                (app-binding-if-exists "Visual Studio Code" :v)
+                (app-binding-if-exists "Google Chrome" :c)
+                (app-binding-if-exists "Brave Browser" :b)
+                (app-binding-if-exists :KakaoTalk :k)]))
 
 (local media-bindings [back-key
                        {:key :h
@@ -113,9 +100,7 @@
                        {:key :s
                         :title "Play or Pause"
                         :action "multimedia:play-or-pause"}
-                       {:key :m
-                        :title "Mute"
-                        :action "multimedia:mute"}
+                       {:key :m :title :Mute :action "multimedia:mute"}
                        {:key :a
                         :title (.. "Launch " music-app)
                         :action (activate music-app)}])
@@ -136,23 +121,20 @@
                         :title "Full Screen"
                         :action "emacs:full-screen"}])
 
-(local display-bindings [back-key
-                         {:key :h
-                             :title "Brightness Down"
-                             :action (fn []
-                                       (hs.brightness.set (- (hs.brightness.get)
-                                                             1)))
-                             :repeatable true}
-                            {:key :l
-                             :title "Brightness Up"
-                             :action (fn []
-                                       (hs.brightness.set (+ (hs.brightness.get)
-                                                             2)))
-                                        ; it's for a very weird reason
-                             :repeatable true}
-                         {:key :t
-                          :title "Toggle Dark Mode"
-                          :action "display:toggle-dark-mode"}])
+(local display-bindings
+       [back-key
+        {:key :h
+         :title "Brightness Down"
+         :action (fn []
+                   (hs.brightness.set (- (hs.brightness.get) 1)))
+         :repeatable true}
+        {:key :l
+         :title "Brightness Up"
+         :action (fn []
+                   (hs.brightness.set (+ (hs.brightness.get) 2)))
+         ; it's for a very weird reason
+         :repeatable true}
+        {:key :t :title "Toggle Dark Mode" :action "display:toggle-dark-mode"}])
 
 ;; Main Menu & Config ===============================
 ;; ==================================================
@@ -170,7 +152,6 @@
         {:key :m :title :Media :items media-bindings}
         {:key :x :title :Emacs :items emacs-bindings}
         {:key :d :title :Display :items display-bindings}])
-
 
 (local agnostic-keys [{:mods [:cmd]
                        :key :space
@@ -302,3 +283,4 @@
 ;; ==================================================
 
 config
+
