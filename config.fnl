@@ -75,21 +75,23 @@
 (fn app-binding [app-name key]
   {: key :title app-name :action (activate app-name)})
 
+(fn app-binding-if-exists [app-name key]
+  (when (hs.fs.displayName (.. "/Applications/" app-name ".app"))
+    {: key :title app-name :action (activate app-name)}))
+
 (local app-bindings (concat [back-key
                              (app-binding :Emacs :e)
                              (app-binding :Finder :f)
                              (app-binding :Terminal :i)
-                             (app-binding :KakaoTalk :k)
                              (app-binding :Slack :s)
                              (app-binding :Calendar :a)
                              (app-binding :Zoom :z)
                              (app-binding :Mail :m)
                              (app-binding "Visual Studio Code" :v)
-                             (app-binding music-app :p)]
-                            [(when (hs.fs.displayName "/Applications/Google Chrome.app")
-                               (app-binding "Google Chrome" :c))]
-                            [(when (hs.fs.displayName "/Applications/Brave Browser.app")
-                               (app-binding "Brave Browser" :b))])) ; I don't know why but it should be done like this
+                             (app-binding music-app :p)
+                             (app-binding-if-exists :KakaoTalk :k)
+                             (app-binding-if-exists "Google Chrome" :c)
+                             (app-binding-if-exists "Brave Browser" :b)]))
 
 (local media-bindings [back-key
                        {:key :h
