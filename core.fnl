@@ -1,15 +1,12 @@
-(hs.ipc.cliInstall) ; ensure CLI installed
+(hs.ipc.cliInstall)
+
+; ensure CLI installed
 
 (local fennel (require :fennel))
 (require :lib.globals)
-(local {:contains? contains?
-        :for-each  for-each
-        :map       map
-        :merge     merge
-        :reduce    reduce
-        :split     split
-        :some      some}
+(local {: contains? : for-each : map : merge : reduce : split : some}
        (require :lib.functional))
+
 (local atom (require :lib.atom))
 (require-macros :lib.macros)
 (require-macros :lib.advice.macros)
@@ -21,11 +18,11 @@
 (global spoon (or _G.spoon {}))
 
 ;; Make ~/.hammerspoon folder override repo files
-(local homedir (os.getenv "HOME"))
-(local customdir (.. homedir "/.hammerspoon"))
+(local homedir (os.getenv :HOME))
+(local customdir (.. homedir :/.hammerspoon))
 (tset fennel :path (.. customdir "/?.fnl;" fennel.path))
 
-(local log (hs.logger.new "\tcore.fnl\t" "debug"))
+(local log (hs.logger.new "\tcore.fnl\t" :debug))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; defaults
@@ -43,8 +40,10 @@ Shortcut for showing an alert on the primary screen for a specified duration
 Takes a message string, a style table, and the number of seconds to show alert
 Returns nil. This function causes side-effects.
 "
-(global alert (afn alert [str style seconds]
-                   (hs.alert.show str style (hs.screen.primaryScreen) seconds)))
+
+(global alert
+        (afn alert [str style seconds]
+             (hs.alert.show str style (hs.screen.primaryScreen) seconds)))
 
 (global fw hs.window.focusedWindow)
 
@@ -59,10 +58,10 @@ Returns nil. This function causes side-effects.
   "Determine if a file exists and is readable.
    Takes a file path string
    Returns true if file is readable"
-  (let [file (io.open filepath "r")]
+  (let [file (io.open filepath :r)]
     (when file
       (io.close file))
-    (~= file nil)))
+    (not= file nil)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; create custom config file if it doesn't exist
@@ -72,8 +71,8 @@ Returns nil. This function causes side-effects.
   "Copies the contents of a source file to a destination file.
    Takes a source file path and a destination file path.
    Returns nil"
-  (let [default-config (io.open source "r")
-        custom-config (io.open dest "a")]
+  (let [default-config (io.open source :r)
+        custom-config (io.open dest :a)]
     (each [line _ (: default-config :lines)]
       (: custom-config :write (.. line "\n")))
     (: custom-config :close)
@@ -84,21 +83,19 @@ Returns nil. This function causes side-effects.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (fn source-filename? [file]
-  (not (string.match file ".#")))       ; if starts with \".#\" then it's an emacs backup file
+  (not (string.match file ".#")))
+; if starts with \".#\" then it's an emacs backup file
 
 (fn source-extension? [file]
   (let [ext (split "%p" file)]
-    (and (or (contains? "fnl" ext)
-             (contains? "lua" ext))
+    (and (or (contains? :fnl ext) (contains? :lua ext))
          (not (string.match file "-test%..*$")))))
-
 
 (fn source-updated? [file]
   "Determine if a file is a valid source file that we can load. Takes a
   file string path. Returns true if file is not an emacs backup and is
   a .fnl or .lua type."
-  (and (source-filename? file)
-       (source-extension? file)))
+  (and (source-filename? file) (source-extension? file)))
 
 (fn config-reloader [files]
   " If the list of files contains some hammerspoon or spacehammer source
@@ -121,33 +118,16 @@ Returns nil. This function causes side-effects.
 ;; Create a global config-files-watcher. Calling it stops the default watcher
 (global config-files-watcher (watch-files hs.configdir))
 
-(when (file-exists? (.. customdir "/config.fnl"))
+(when (file-exists? (.. customdir :/config.fnl))
   (global custom-files-watcher (watch-files customdir)))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Set utility keybindings
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
-;; toggle hs.console with Ctrl+Cmd+~
-(hs.hotkey.bind
- [:ctrl :cmd] "`" nil
- (fn []
-   (if-let
-    [console (hs.console.hswindow)]
-    (when (= console (hs.console.hswindow))
-      (hs.closeConsole))
-    (hs.openConsole))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Load custom init.fnl file (if it exists)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(let [custom-init-file (.. customdir "/init.fnl")]
+(let [custom-init-file (.. customdir :/init.fnl)]
   (when (file-exists? custom-init-file)
     (fennel.dofile custom-init-file)))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Initialize core modules
@@ -160,26 +140,20 @@ Returns nil. This function causes side-effects.
 (local config (require :config))
 
 ;; Initialize our modules that depend on config
-(local modules [:lib.hyper
-                :vim
-                :windows
-                :apps
-                :lib.bind
-                :lib.modal
-                :lib.apps])
+(local modules [:lib.hyper :vim :windows :apps :lib.bind :lib.modal :lib.apps])
 
 (defadvice get-config-impl
-           []
-           :override get-config
-           "Returns global config obj"
-           config)
+  []
+  :override
+  get-config
+  "Returns global config obj"
+  config)
 
 ;; Create a global reference so services like hs.application.watcher
 ;; do not get garbage collected.
-(global resources
-        (->> modules
-             (map (fn [path]
-                    (let [module (require path)]
-                      {path (module.init config)})))
-             (reduce #(merge $1 $2) {})))
+(global resources (->> modules
+                       (map (fn [path]
+                              (let [module (require path)]
+                                {path (module.init config)})))
+                       (reduce #(merge $1 $2) {})))
 
