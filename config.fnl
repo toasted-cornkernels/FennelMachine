@@ -48,6 +48,22 @@
          :key :l
          :action "windows:resize-border-right"
          :repeatable true}
+        {:mods [:shift]
+         :key :h
+         :action "windows:resize-half-left"
+         :repeatable false}
+        {:mods [:shift]
+         :key :j
+         :action "windows:resize-half-down"
+         :repeatable false}
+        {:mods [:shift]
+         :key :k
+         :action "windows:resize-half-up"
+         :repeatable false}
+        {:mods [:shift]
+         :key :l
+         :action "windows:resize-half-right"
+         :repeatable false}
         {:key :w :title "Last Window" :action "windows:jump-to-last-window"}
         {:key :m :title :Maximize :action "windows:maximize-window-frame"}
         {:key :c :title :Center :action "windows:center-enlarge-with-rate"}
