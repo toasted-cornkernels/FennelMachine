@@ -203,34 +203,45 @@
 ;; ==================================================
 
 (hs.hotkey.bind [:cmd] :h nil (fn []
-                                (when (= (: (hs.application.frontmostApplication)
-                                            :name)
-                                         :Emacs)
-                                  (: (hs.eventtap.event.newKeyEvent [] :escape
-                                                                    true)
-                                     :post)
-                                  (: (hs.eventtap.event.newKeyEvent [] :escape
-                                                                    false)
-                                     :post)
-                                  (: (hs.eventtap.event.newKeyEvent [] :space
-                                                                    true)
-                                     :post)
-                                  (: (hs.eventtap.event.newKeyEvent [] :space
-                                                                    false)
-                                     :post)
-                                  (: (hs.eventtap.event.newKeyEvent [] :w true)
-                                     :post)
-                                  (: (hs.eventtap.event.newKeyEvent [] :w false)
-                                     :post)
-                                  (: (hs.eventtap.event.newKeyEvent [] :h true)
-                                     :post)
-                                  (: (hs.eventtap.event.newKeyEvent [] :h false)
-                                     :post))))
+                                (let [app-name (: (hs.application.frontmostApplication)
+                                                  :name)]
+                                  ;; TODO: How do I tell if the frontmostApplication is Visual Studio Code?
+                                  (when (or (= app-name :Emacs)
+                                            (= app-name "Visual Studio Code"))
+                                    (: (hs.eventtap.event.newKeyEvent []
+                                                                      :escape
+                                                                      true)
+                                       :post)
+                                    (: (hs.eventtap.event.newKeyEvent []
+                                                                      :escape
+                                                                      false)
+                                       :post)
+                                    (: (hs.eventtap.event.newKeyEvent [] :space
+                                                                      true)
+                                       :post)
+                                    (: (hs.eventtap.event.newKeyEvent [] :space
+                                                                      false)
+                                       :post)
+                                    (: (hs.eventtap.event.newKeyEvent [] :w
+                                                                      true)
+                                       :post)
+                                    (: (hs.eventtap.event.newKeyEvent [] :w
+                                                                      false)
+                                       :post)
+                                    (: (hs.eventtap.event.newKeyEvent [] :h
+                                                                      true)
+                                       :post)
+                                    (: (hs.eventtap.event.newKeyEvent [] :h
+                                                                      false)
+                                       :post)))))
 
 ;; Rshift+esc to tilde ==============================
 ;; ==================================================
 
 (hs.hotkey.bind [:rightshift] :escape nil
                 (fn []
-                  (: (hs.eventtap.event.newKeyEvent [:rightshift] "`" true) :post)
-                  (: (hs.eventtap.event.newKeyEvent [:rightshift] "`" false) :post)))
+                  (: (hs.eventtap.event.newKeyEvent [:rightshift] "`" true)
+                     :post)
+                  (: (hs.eventtap.event.newKeyEvent [:rightshift] "`" false)
+                     :post)))
+
