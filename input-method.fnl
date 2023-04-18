@@ -184,18 +184,18 @@
 
 (hs.hotkey.bind [:alt :shift] :9 nil
                 (fn []
-                  (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_UP true)
+                  (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_DOWN
+                                                          true)
                      :post)
-                  (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_UP
+                  (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_DOWN
                                                           false)
                      :post)))
 
 (hs.hotkey.bind [:alt :shift] :0 nil
                 (fn []
-                  (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_DOWN
-                                                          true)
+                  (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_UP true)
                      :post)
-                  (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_DOWN
+                  (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_UP
                                                           false)
                      :post)))
 
