@@ -136,18 +136,18 @@
                   (: (hs.eventtap.event.newSystemKeyEvent :MUTE true) :post)
                   (: (hs.eventtap.event.newSystemKeyEvent :MUTE false) :post)))
 
-(hs.hotkey.bind [:alt :shift] :p nil
+(hs.hotkey.bind [:alt :shift] :s nil
                 (fn []
                   (: (hs.eventtap.event.newSystemKeyEvent :PAUSE true) :post)
                   (: (hs.eventtap.event.newSystemKeyEvent :PAUSE false) :post)))
 
-(hs.hotkey.bind [:alt :shift] ";" nil
+(hs.hotkey.bind [:alt :shift] "p" nil
                 (fn []
                   (: (hs.eventtap.event.newSystemKeyEvent :PREVIOUS true) :post)
                   (: (hs.eventtap.event.newSystemKeyEvent :PREVIOUS false)
                      :post)))
 
-(hs.hotkey.bind [:alt :shift] "'" nil
+(hs.hotkey.bind [:alt :shift] "n" nil
                 (fn []
                   (: (hs.eventtap.event.newSystemKeyEvent :NEXT true) :post)
                   (: (hs.eventtap.event.newSystemKeyEvent :NEXT false) :post)))
