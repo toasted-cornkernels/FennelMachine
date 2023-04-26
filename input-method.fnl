@@ -199,42 +199,6 @@
                                                           false)
                      :post)))
 
-;; cmd+h as space+w+h ===============================
-;; ==================================================
-
-(hs.hotkey.bind [:cmd] :h nil (fn []
-                                (let [app-name (: (hs.application.frontmostApplication)
-                                                  :name)]
-                                  ;; TODO: How do I tell if the frontmostApplication is Visual Studio Code?
-                                  (when (or (= app-name :Emacs)
-                                            (= app-name "Visual Studio Code"))
-                                    (: (hs.eventtap.event.newKeyEvent []
-                                                                      :escape
-                                                                      true)
-                                       :post)
-                                    (: (hs.eventtap.event.newKeyEvent []
-                                                                      :escape
-                                                                      false)
-                                       :post)
-                                    (: (hs.eventtap.event.newKeyEvent [] :space
-                                                                      true)
-                                       :post)
-                                    (: (hs.eventtap.event.newKeyEvent [] :space
-                                                                      false)
-                                       :post)
-                                    (: (hs.eventtap.event.newKeyEvent [] :w
-                                                                      true)
-                                       :post)
-                                    (: (hs.eventtap.event.newKeyEvent [] :w
-                                                                      false)
-                                       :post)
-                                    (: (hs.eventtap.event.newKeyEvent [] :h
-                                                                      true)
-                                       :post)
-                                    (: (hs.eventtap.event.newKeyEvent [] :h
-                                                                      false)
-                                       :post)))))
-
 ;; Rshift+esc to tilde ==============================
 ;; ==================================================
 
