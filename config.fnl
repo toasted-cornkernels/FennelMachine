@@ -48,17 +48,18 @@
          :key :l
          :action "windows:resize-border-right"
          :repeatable true}
+        {:mods [:shift] :key :hjkl :title "Resize Half"}
         {:mods [:shift]
          :key :h
          :action "windows:resize-half-left"
          :repeatable false}
         {:mods [:shift]
          :key :j
-         :action "windows:resize-half-down"
+         :action "windows:resize-half-bottom"
          :repeatable false}
         {:mods [:shift]
          :key :k
-         :action "windows:resize-half-up"
+         :action "windows:resize-half-top"
          :repeatable false}
         {:mods [:shift]
          :key :l

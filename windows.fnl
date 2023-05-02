@@ -6,11 +6,10 @@
         : map
         : for-each
         : split} (require :lib.functional))
-(local {:global-filter global-filter} (require :lib.utils))
-(local {:atom   atom
-        :deref  deref
-        :swap!  swap!
-        :reset! reset!} (require :lib.atom))
+
+(local {: global-filter} (require :lib.utils))
+(local {: atom : deref : swap! : reset!} (require :lib.atom))
+
 (require-macros :lib.advice.macros)
 
 ;; History ==========================================
@@ -21,19 +20,19 @@
 (fn history.push [self]
   "Append current window frame geometry to history. self is the global history table instance"
   (let [win (hs.window.focusedWindow)
-        id  (when win (win:id))
+        id (when win (win:id))
         tbl (. self id)]
     (when win
       (if (= (type tbl) :nil)
           (tset self id [(win:frame)])
           (let [last-el (. tbl (length tbl))]
-            (when (~= last-el (win:frame))
+            (when (not= last-el (win:frame))
               (table.insert tbl (win:frame))))))))
 
 (fn history.pop [self]
   "Go back to previous window frame geometry in history. self is the history table instance"
   (let [win (hs.window.focusedWindow)
-        id  (when win (win:id))
+        id (when win (win:id))
         tbl (. self id)]
     (when (and win tbl)
       (let [el (table.remove tbl)
@@ -52,7 +51,7 @@
 ;; ==================================================
 
 (fn resize-border-up []
-  (let [window (hs.window.focusedWindow) 
+  (let [window (hs.window.focusedWindow)
         window-frame (window:frame)
         screen-frame (: (window:screen) :frame)]
     (set window-frame.y (- window-frame.y 10))
@@ -60,7 +59,7 @@
     (window:setFrame window-frame)))
 
 (fn resize-border-down []
-  (let [window (hs.window.focusedWindow) 
+  (let [window (hs.window.focusedWindow)
         window-frame (window:frame)
         screen-frame (: (window:screen) :frame)]
     (set window-frame.h (+ window-frame.h 10))
@@ -113,12 +112,18 @@
   (let [window (hs.window.focusedWindow)
         window-frame (window:frame)
         screen-frame (: (window:screen) :frame)
-        rate 0.8]
+        rate 0.9]
     (set window-frame.x (* (* screen-frame.w (- 1 rate)) 0.5))
     (set window-frame.y (* (* screen-frame.h (- 1 rate)) 0.5))
     (set window-frame.w (* screen-frame.w rate))
     (set window-frame.h (* screen-frame.h rate))
     (window:setFrame window-frame)))
+
+;; Do it repeatedly =================================
+;; ==================================================
+
+(fn repeat-apply [window-adjustment x y]
+  "Repeatedly do `window-adjustment` until its position stabilizes.")
 
 ;; Shared Functions =================================
 ;; ==================================================
@@ -130,15 +135,14 @@
     (: rect :setStrokeWidth 5)
     (: rect :setFill false)
     (: rect :show)
-    (hs.timer.doAfter .3 (fn [] (: rect :delete)))))
+    (hs.timer.doAfter 0.3 (fn [] (: rect :delete)))))
 
 (fn maximize-window-frame []
   (: history :push)
   (: (hs.window.focusedWindow) :maximize 0)
   (highlight-active-window))
 
-(fn position-window-center
-  [ratio-str window screen]
+(fn position-window-center [ratio-str window screen]
   "Takes the center-ratio key from config, or default value if not
    provided, and the window center-window-frame was called with,
    and the current screen.  Should calculate the centered
@@ -148,10 +152,7 @@
         [w-percent h-percent] (split ":" ratio-str)
         w-percent (/ (tonumber w-percent) 100)
         h-percent (/ (tonumber h-percent) 100)
-        update {:w (* w-percent frame.w)
-                :h (* h-percent frame.h)
-                :x 0
-                :y 0}]
+        update {:w (* w-percent frame.w) :h (* h-percent frame.h) :x 0 :y 0}]
     (doto window
       (: :setFrameInScreenBounds update)
       (: :centerOnScreen))
@@ -162,7 +163,7 @@
   (let [win (hs.window.focusedWindow)
         prev-duration hs.window.animationDuration
         config (get-config)
-        ratio  (or config.modules.windows.center-ratio "80:50")
+        ratio (or config.modules.windows.center-ratio "80:50")
         screen (hs.screen.primaryScreen)]
     (tset hs.window :animationDuration 0)
     (position-window-center ratio win screen)
@@ -173,15 +174,13 @@
   (let [app (hs.application.find app-name)]
     (when app
       (: app :activate)
-      (hs.timer.doAfter .05 highlight-active-window)
+      (hs.timer.doAfter 0.05 highlight-active-window)
       (: app :unhide))))
 
 (fn set-mouse-cursor-at [app-title]
   (let [sf (: (: (hs.application.find app-title) :focusedWindow) :frame)
-        desired-point (hs.geometry.point (- (+ sf._x sf._w)
-                                            (/ sf._w  2))
-                                         (- (+ sf._y sf._h)
-                                            (/ sf._h 2)))]
+        desired-point (hs.geometry.point (- (+ sf._x sf._w) (/ sf._w 2))
+                                         (- (+ sf._y sf._h) (/ sf._h 2)))]
     (hs.mouse.setAbsolutePosition desired-point)))
 
 (fn show-grid []
@@ -203,13 +202,13 @@
   emacs, then run (jump-window :l) hammerspoon will move active focus
   to the browser.  Takes an arrow like :h :j :k :l to support vim key
   bindings.  Performs side effects, Returns nil"
-  (let [dir {:h "West" :j "South" :k "North" :l "East"}
+  (let [dir {:h :West :j :South :k :North :l :East}
         space (. (hs.window.focusedWindow) :filter :defaultCurrentSpace)
         fn-name (.. :focusWindow (. dir arrow))]
     (: space fn-name nil true true)
     (highlight-active-window)))
 
-(fn jump-window-left  []
+(fn jump-window-left []
   (jump-window :h))
 
 (fn jump-window-above []
@@ -233,11 +232,22 @@
 ;; Movement/Resizing Constants ======================
 ;; ==================================================
 
-(local arrow-map
-       {:k {:half [0  0  1 .5] :movement [  0 -20] :complement :h :resize "Shorter"}
-        :j {:half [0 .5  1 .5] :movement [  0  20] :complement :l :resize "Taller"}
-        :h {:half [0  0 .5  1] :movement [-20   0] :complement :j :resize "Thinner"}
-        :l {:half [.5 0 .5  1] :movement [ 20   0] :complement :k :resize "Wider"}})
+(local arrow-map {:k {:half [0 0 1 0.5]
+                      :movement [0 -20]
+                      :complement :h
+                      :resize :Shorter}
+                  :j {:half [0 0.5 1 0.5]
+                      :movement [0 20]
+                      :complement :l
+                      :resize :Taller}
+                  :h {:half [0 0 0.5 1]
+                      :movement [-20 0]
+                      :complement :j
+                      :resize :Thinner}
+                  :l {:half [0.5 0 0.5 1]
+                      :movement [20 0]
+                      :complement :k
+                      :resize :Wider}})
 
 (fn grid [method direction]
   "Moves, expands, or shrinks the active window by the next grid
@@ -257,8 +267,7 @@
   (let [win (hs.window.focusedWindow)]
     (when win (: win :move rct))))
 
-(fn resize-window-halve
-  [arrow]
+(fn resize-window-halve [arrow]
   "Resize a window by half the grid dimensions specified in config.fnl.
   Takes an :h :j :k or :l arrow Performs a side effect to resize the
   active window's frame rect Returns nil"
@@ -277,7 +286,6 @@
 (fn resize-half-bottom []
   (resize-window-halve :j))
 
-
 ;; Resize window by increments ======================
 ;; ==================================================
 
@@ -290,10 +298,7 @@
   Takes an arrow like :h :j :k :l
   Performs a side-effect to resize the current window to the next grid increment
   Returns nil"
-  (let [directions {:h "Left"
-                    :j "Down"
-                    :k "Up"
-                    :l "Right"}]
+  (let [directions {:h :Left :j :Down :k :Up :l :Right}]
     (: history :push)
     (when (or (= arrow :h) (= arrow :l))
       (hs.grid.resizeWindowThinner (hs.window.focusedWindow)))
@@ -383,20 +388,21 @@
   "Shows a big number at the corner of hs.screen.
    To be used as for multi-monitor setups, to easily identify index of
    each screen."
-  (let [cs        (canvas.new {})
+  (let [cs (canvas.new {})
         font-size (/ (. (: screen :frame) :w) 10)]
     (swap! screen-number-canvases (fn [t] (concat t [cs])))
     (doto cs
       (: :frame (: screen :frame))
-      (: :appendElements
-         [{:action     :fill
-           :type       :text
-           :frame      {:x "0.93" :y 0 :h "1" :w "1"}
-           :text       (hs.styledtext.new
-                        idx
-                        {:font  {:size font-size}
-                         :color {:red 1 :green 0.5 :blue 0 :alpha 1}})
-           :withShadow true}])
+      (: :appendElements [{:action :fill
+                           :type :text
+                           :frame {:x :0.93 :y 0 :h :1 :w :1}
+                           :text (hs.styledtext.new idx
+                                                    {:font {:size font-size}
+                                                     :color {:red 1
+                                                             :green 0.5
+                                                             :blue 0
+                                                             :alpha 1}})
+                           :withShadow true}])
       (: :show))))
 
 (fn show-display-numbers [screens]
@@ -411,9 +417,7 @@
 (fn hide-display-numbers []
   "Hides big numbers at the corner of each screen that are used for
    guidance in multi-monitor setups."
-  (for-each
-   (fn [c] (: c :delete .4))
-   (deref screen-number-canvases))
+  (for-each (fn [c] (: c :delete 0.4)) (deref screen-number-canvases))
   (reset! screen-number-canvases []))
 
 (fn monitor-item [screen i]
@@ -476,7 +480,7 @@
    - Set grid margins from config.fnl like {:grid {:margins [10 10]}}
    - Set the grid dimensions from config.fnl like {:grid {:size \"3x2\"}}"
   (hs.grid.setMargins (or (get-in [:grid :margins] config) [0 0]))
-  (hs.grid.setGrid (or (get-in [:grid :size] config) "3x2")))
+  (hs.grid.setGrid (or (get-in [:grid :size] config) :3x2)))
 
 ;; Exports ==========================================
 ;; ==================================================
@@ -515,20 +519,17 @@
  : resize-right
  : resize-up
  : resize-to-grid
-
  : resize-border-up
  : resize-border-down
  : resize-border-left
  : resize-border-right
-
  : move-up
  : move-down
  : move-left
  : move-right
-
  : center-enlarge-with-rate
- 
  : set-mouse-cursor-at
  : show-display-numbers
  : show-grid
  : undo}
+
