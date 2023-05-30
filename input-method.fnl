@@ -173,31 +173,31 @@
 ;; Keyboard Illumination ============================
 ;; ==================================================
 
-(hs.hotkey.bind [:alt :shift] :8 nil
-                (fn []
-                  (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_TOGGLE
-                                                          true)
-                     :post)
-                  (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_TOGGLE
-                                                          false)
-                     :post)))
+;; (hs.hotkey.bind [:alt :shift] :8 nil
+;;                 (fn []
+;;                   (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_TOGGLE
+;;                                                           true)
+;;                      :post)
+;;                   (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_TOGGLE
+;;                                                           false)
+;;                      :post)))
 
-(hs.hotkey.bind [:alt :shift] :9 nil
-                (fn []
-                  (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_DOWN
-                                                          true)
-                     :post)
-                  (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_DOWN
-                                                          false)
-                     :post)))
+;; (hs.hotkey.bind [:alt :shift] :9 nil
+;;                 (fn []
+;;                   (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_DOWN
+;;                                                           true)
+;;                      :post)
+;;                   (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_DOWN
+;;                                                           false)
+;;                      :post)))
 
-(hs.hotkey.bind [:alt :shift] :0 nil
-                (fn []
-                  (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_UP true)
-                     :post)
-                  (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_UP
-                                                          false)
-                     :post)))
+;; (hs.hotkey.bind [:alt :shift] :0 nil
+;;                 (fn []
+;;                   (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_UP true)
+;;                      :post)
+;;                   (: (hs.eventtap.event.newSystemKeyEvent :ILLUMINATION_UP
+;;                                                           false)
+;;                      :post)))
 
 ;; Rshift+esc to tilde ==============================
 ;; ==================================================
