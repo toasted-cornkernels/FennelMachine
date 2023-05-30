@@ -212,7 +212,7 @@
 ;; Cmd+shift+o to Shift+F10 ==========================
 ;; ==================================================
 
-(hs.hotkey.bind [:cmd :shift] :o nil
+(hs.hotkey.bind [:cmd :shift] :m nil
                 (fn []
                   (: (hs.eventtap.event.newKeyEvent [:shift] :f10 true)
                      :post)
