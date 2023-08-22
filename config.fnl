@@ -67,6 +67,10 @@
          :repeatable false}
         {:key :w :title "Last Window" :action "windows:jump-to-last-window"}
         {:key :m :title :Maximize :action "windows:maximize-window-frame"}
+        {:mods [:shift]
+         :key :m
+         :title :Minimize
+         :action "windows:minimize-window-frame"}
         {:key :c :title :Center :action "windows:center-enlarge-with-rate"}
         {:key :g :title :Grid :action "windows:show-grid"}
         {:key :u :title :Undo :action "windows:undo"}])

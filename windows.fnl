@@ -112,7 +112,7 @@
   (let [window (hs.window.focusedWindow)
         window-frame (window:frame)
         screen-frame (: (window:screen) :frame)
-        rate 0.9]
+        rate 0.85]
     (set window-frame.x (* (* screen-frame.w (- 1 rate)) 0.5))
     (set window-frame.y (* (* screen-frame.h (- 1 rate)) 0.5))
     (set window-frame.w (* screen-frame.w rate))
@@ -141,6 +141,9 @@
   (: history :push)
   (: (hs.window.focusedWindow) :maximize 0)
   (highlight-active-window))
+
+(fn minimize-window-frame []
+  (: (hs.window.focusedWindow) :minimize))
 
 (fn position-window-center [ratio-str window screen]
   "Takes the center-ratio key from config, or default value if not
@@ -499,6 +502,7 @@
  : jump-window-left
  : jump-window-right
  : maximize-window-frame
+ : minimize-window-frame
  : move-east
  : move-north
  : move-south
