@@ -27,43 +27,43 @@
 (local window-bindings
        [back-key
         {:key :hjkl :title :Move}
-        {:key :h :action "windows:move-left" :repeatable true}
-        {:key :j :action "windows:move-down" :repeatable true}
-        {:key :k :action "windows:move-up" :repeatable true}
-        {:key :l :action "windows:move-right" :repeatable true}
+        {:key :h :action "windows:move-left-repeatedly" :repeatable true}
+        {:key :j :action "windows:move-down-repeatedly" :repeatable true}
+        {:key :k :action "windows:move-up-repeatedly" :repeatable true}
+        {:key :l :action "windows:move-right-repeatedly" :repeatable true}
         {:mods [:cmd] :key :hjkl :title :Resize}
         {:mods [:cmd]
          :key :h
-         :action "windows:resize-border-left"
+         :action "windows:resize-border-left-repeatedly"
          :repeatable true}
         {:mods [:cmd]
          :key :j
-         :action "windows:resize-border-down"
+         :action "windows:resize-border-down-repeatedly"
          :repeatable true}
         {:mods [:cmd]
          :key :k
-         :action "windows:resize-border-up"
+         :action "windows:resize-border-up-repeatedly"
          :repeatable true}
         {:mods [:cmd]
          :key :l
-         :action "windows:resize-border-right"
+         :action "windows:resize-border-right-repeatedly"
          :repeatable true}
         {:mods [:shift] :key :hjkl :title "Resize Half"}
         {:mods [:shift]
          :key :h
-         :action "windows:resize-half-left"
+         :action "windows:resize-half-left-repeatedly"
          :repeatable false}
         {:mods [:shift]
          :key :j
-         :action "windows:resize-half-bottom"
+         :action "windows:resize-half-bottom-repeatedly"
          :repeatable false}
         {:mods [:shift]
          :key :k
-         :action "windows:resize-half-top"
+         :action "windows:resize-half-top-repeatedly"
          :repeatable false}
         {:mods [:shift]
          :key :l
-         :action "windows:resize-half-right"
+         :action "windows:resize-half-right-repeatedly"
          :repeatable false}
         {:key :w :title "Last Window" :action "windows:jump-to-last-window"}
         {:key :m :title :Maximize :action "windows:maximize-window-frame"}
@@ -71,7 +71,9 @@
          :key :m
          :title :Minimize
          :action "windows:minimize-window-frame"}
-        {:key :c :title :Center :action "windows:center-enlarge-with-rate"}
+        {:key :c
+         :title :Center
+         :action "windows:center-enlarge-with-rate-repeatedly"}
         {:key :g :title :Grid :action "windows:show-grid"}
         {:key :u :title :Undo :action "windows:undo"}])
 
@@ -89,7 +91,7 @@
        (filter identity
                [back-key
                 (app-binding :Emacs :e)
-                (app-binding :Finder :f)
+                (app-binding :Safari :f)
                 (app-binding :Terminal :i)
                 (app-binding :Slack :s)
                 (app-binding :Calendar :a)
