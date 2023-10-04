@@ -82,28 +82,69 @@
                             (hs.closeConsole))
                           (hs.openConsole))))
 
+;; Terminal-style backspace =========================
+;; ==================================================
+
+(hs.hotkey.bind [:ctrl] :h (fn []
+                             (: (hs.eventtap.event.newKeyEvent [] :delete true)
+                                :post)
+                             (: (hs.eventtap.event.newKeyEvent [] :delete false)
+                                :post)) nil
+                (fn []
+                  (: (hs.eventtap.event.newKeyEvent [] :delete true) :post)
+                  (: (hs.eventtap.event.newKeyEvent [] :delete false) :post)))
+
 ;; Arrow keys =======================================
 ;; ==================================================
 
-(hs.hotkey.bind [:cmd :shift] :h nil
+(hs.hotkey.bind [:cmd :shift] :h (fn []
+                                   (: (hs.eventtap.event.newKeyEvent [:fn]
+                                                                     :left true)
+                                      :post)
+                                   (: (hs.eventtap.event.newKeyEvent [:fn]
+                                                                     :left false)
+                                      :post))
+                nil
                 (fn []
                   (: (hs.eventtap.event.newKeyEvent [:fn] :left true) :post)
                   (: (hs.eventtap.event.newKeyEvent [:fn] :left false) :post)))
 
-(hs.hotkey.bind [:cmd :shift] :j nil
+(hs.hotkey.bind [:cmd :shift] :j (fn []
+                                   (: (hs.eventtap.event.newKeyEvent [:fn]
+                                                                     :down true)
+                                      :post)
+                                   (: (hs.eventtap.event.newKeyEvent [:fn]
+                                                                     :down false)
+                                      :post))
+                nil
                 (fn []
                   (: (hs.eventtap.event.newKeyEvent [:fn] :down true) :post)
                   (: (hs.eventtap.event.newKeyEvent [:fn] :down false) :post)))
 
-(hs.hotkey.bind [:cmd :shift] :k nil
+(hs.hotkey.bind [:cmd :shift] :k (fn []
+                                   (: (hs.eventtap.event.newKeyEvent [:fn] :up
+                                                                     true)
+                                      :post)
+                                   (: (hs.eventtap.event.newKeyEvent [:fn] :up
+                                                                     false)
+                                      :post))
+                nil
                 (fn []
                   (: (hs.eventtap.event.newKeyEvent [:fn] :up true) :post)
                   (: (hs.eventtap.event.newKeyEvent [:fn] :up false) :post)))
 
-(hs.hotkey.bind [:cmd :shift] :l nil
-                (fn []
-                  (: (hs.eventtap.event.newKeyEvent [:fn] :right true) :post)
-                  (: (hs.eventtap.event.newKeyEvent [:fn] :right false) :post)))
+(hs.hotkey.bind [:cmd :shift] :l (fn []
+                                   (: (hs.eventtap.event.newKeyEvent [:fn]
+                                                                     :right true)
+                                      :post)
+                                   (: (hs.eventtap.event.newKeyEvent [:fn]
+                                                                     :right
+                                                                     false)
+                                      :post))
+                nil (fn []
+                     (: (hs.eventtap.event.newKeyEvent [:fn] :right true) :post)
+                     (: (hs.eventtap.event.newKeyEvent [:fn] :right false)
+                        :post)))
 
 ;; Mouse keys: normal speed =========================
 ;; ==================================================
@@ -141,13 +182,13 @@
                   (: (hs.eventtap.event.newSystemKeyEvent :PAUSE true) :post)
                   (: (hs.eventtap.event.newSystemKeyEvent :PAUSE false) :post)))
 
-(hs.hotkey.bind [:alt :shift] "p" nil
+(hs.hotkey.bind [:alt :shift] :p nil
                 (fn []
                   (: (hs.eventtap.event.newSystemKeyEvent :PREVIOUS true) :post)
                   (: (hs.eventtap.event.newSystemKeyEvent :PREVIOUS false)
                      :post)))
 
-(hs.hotkey.bind [:alt :shift] "n" nil
+(hs.hotkey.bind [:alt :shift] :n nil
                 (fn []
                   (: (hs.eventtap.event.newSystemKeyEvent :NEXT true) :post)
                   (: (hs.eventtap.event.newSystemKeyEvent :NEXT false) :post)))
@@ -209,12 +250,11 @@
                   (: (hs.eventtap.event.newKeyEvent [:rightshift] "`" false)
                      :post)))
 
-;; Cmd+shift+o to Shift+F10 ==========================
+;; Cmd+shift+m to Shift+F10 ==========================
 ;; ==================================================
 
 (hs.hotkey.bind [:cmd :shift] :m nil
                 (fn []
-                  (: (hs.eventtap.event.newKeyEvent [:shift] :f10 true)
-                     :post)
-                  (: (hs.eventtap.event.newKeyEvent [:shift] :f10 false)
-                     :post)))
+                  (: (hs.eventtap.event.newKeyEvent [:shift] :f10 true) :post)
+                  (: (hs.eventtap.event.newKeyEvent [:shift] :f10 false) :post)))
+
