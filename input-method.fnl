@@ -45,57 +45,32 @@
 ;; Mission Control ==================================
 ;; ==================================================
 
-(hs.hotkey.bind [:ctrl :cmd] :h (fn []
-                                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl]
-                                                                    :left true)
-                                     :post)
-                                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl]
-                                                                    :left false)
-                                     :post))
-                nil (fn []
-                     (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :left true)
-                        :post)
-                     (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :left false)
-                        :post)))
+(hs.hotkey.bind [:ctrl :cmd] :h nil
+                (fn []
+                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :left true)
+                     :post)
+                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :left false)
+                     :post)))
 
-(hs.hotkey.bind [:ctrl :cmd] :j (fn []
-                                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl]
-                                                                    :down true)
-                                     :post)
-                                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl]
-                                                                    :down false)
-                                     :post))
-                nil (fn []
-                     (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :down true)
-                        :post)
-                     (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :down false)
-                        :post)))
+(hs.hotkey.bind [:ctrl :cmd] :j nil
+                (fn []
+                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :down true)
+                     :post)
+                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :down false)
+                     :post)))
 
-(hs.hotkey.bind [:ctrl :cmd] :k (fn []
-                                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl]
-                                                                    :up true)
-                                     :post)
-                                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl]
-                                                                    :up false)
-                                     :post))
-                nil (fn []
-                     (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :up true)
-                        :post)
-                     (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :up false)
-                        :post)))
+(hs.hotkey.bind [:ctrl :cmd] :k nil
+                (fn []
+                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :up true) :post)
+                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :up false)
+                     :post)))
 
-(hs.hotkey.bind [:ctrl :cmd] :l (fn []
-                                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl]
-                                                                    :right true)
-                                     :post)
-                                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl]
-                                                                    :right false)
-                                     :post))
-                nil (fn []
-                     (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :right true)
-                        :post)
-                     (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :right false)
-                        :post)))
+(hs.hotkey.bind [:ctrl :cmd] :l nil
+                (fn []
+                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :right true)
+                     :post)
+                  (: (hs.eventtap.event.newKeyEvent [:fn :ctrl] :right false)
+                     :post)))
 
 ;; toggle hs.console ================================
 ;; ==================================================
@@ -110,6 +85,8 @@
 ;; Terminal-style backspace =========================
 ;; ==================================================
 
+;; TODO: Make Emacs an exception
+
 (hs.hotkey.bind [:ctrl] :h (fn []
                              (: (hs.eventtap.event.newKeyEvent [] :delete true)
                                 :post)
@@ -118,6 +95,33 @@
                 (fn []
                   (: (hs.eventtap.event.newKeyEvent [] :delete true) :post)
                   (: (hs.eventtap.event.newKeyEvent [] :delete false) :post)))
+
+(hs.hotkey.bind [:ctrl] :j (fn []
+                             (: (hs.eventtap.event.newKeyEvent [] :return true)
+                                :post)
+                             (: (hs.eventtap.event.newKeyEvent [] :return false)
+                                :post)) nil
+                (fn []
+                  (: (hs.eventtap.event.newKeyEvent [] :return true) :post)
+                  (: (hs.eventtap.event.newKeyEvent [] :return false) :post)))
+
+(hs.hotkey.bind [:ctrl] :m (fn []
+                             (: (hs.eventtap.event.newKeyEvent [] :return true)
+                                :post)
+                             (: (hs.eventtap.event.newKeyEvent [] :return false)
+                                :post)) nil
+                (fn []
+                  (: (hs.eventtap.event.newKeyEvent [] :return true) :post)
+                  (: (hs.eventtap.event.newKeyEvent [] :return false) :post)))
+
+;; (hs.hotkey.bind [:ctrl] :u (fn []
+;;                              (: (hs.eventtap.event.newKeyEvent [:cmd] :delete true)
+;;                                 :post)
+;;                              (: (hs.eventtap.event.newKeyEvent [:cmd] :delete false)
+;;                                 :post)) nil
+;;                 (fn []
+;;                   (: (hs.eventtap.event.newKeyEvent [:cmd] :delete true) :post)
+;;                   (: (hs.eventtap.event.newKeyEvent [:cmd] :delete false) :post)))
 
 ;; Arrow keys =======================================
 ;; ==================================================
