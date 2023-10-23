@@ -105,20 +105,29 @@
                              (: (hs.eventtap.event.newKeyEvent [] :return true)
                                 :post)
                              (: (hs.eventtap.event.newKeyEvent [] :return false)
-                                :post)))
+                                :post)) nil
+                (fn []
+                  (: (hs.eventtap.event.newKeyEvent [] :return true) :post)
+                  (: (hs.eventtap.event.newKeyEvent [] :return false) :post)))
 
 (hs.hotkey.bind [:ctrl] :m (fn []
                              (: (hs.eventtap.event.newKeyEvent [] :return true)
                                 :post)
                              (: (hs.eventtap.event.newKeyEvent [] :return false)
-                                :post)))
+                                :post)) nil
+                (fn []
+                  (: (hs.eventtap.event.newKeyEvent [] :return true) :post)
+                  (: (hs.eventtap.event.newKeyEvent [] :return false) :post)))
 
 (hs.hotkey.bind [:ctrl] "[" (fn []
                               (: (hs.eventtap.event.newKeyEvent [] :escape true)
                                  :post)
                               (: (hs.eventtap.event.newKeyEvent [] :escape
                                                                 false)
-                                 :post)))
+                                 :post)) nil
+                (fn []
+                  (: (hs.eventtap.event.newKeyEvent [] :escape true) :post)
+                  (: (hs.eventtap.event.newKeyEvent [] :escape false) :post)))
 
 ;; (hs.hotkey.bind [:ctrl] :u (fn []
 ;;                              (: (hs.eventtap.event.newKeyEvent [:cmd] :delete true)
@@ -138,7 +147,11 @@
                                       :post)
                                    (: (hs.eventtap.event.newKeyEvent [:fn]
                                                                      :left false)
-                                      :post)))
+                                      :post))
+                nil
+                (fn []
+                  (: (hs.eventtap.event.newKeyEvent [:fn] :left true) :post)
+                  (: (hs.eventtap.event.newKeyEvent [:fn] :left false) :post)))
 
 (hs.hotkey.bind [:cmd :shift] :j (fn []
                                    (: (hs.eventtap.event.newKeyEvent [:fn]
@@ -146,7 +159,11 @@
                                       :post)
                                    (: (hs.eventtap.event.newKeyEvent [:fn]
                                                                      :down false)
-                                      :post)))
+                                      :post))
+                nil
+                (fn []
+                  (: (hs.eventtap.event.newKeyEvent [:fn] :down true) :post)
+                  (: (hs.eventtap.event.newKeyEvent [:fn] :down false) :post)))
 
 (hs.hotkey.bind [:cmd :shift] :k (fn []
                                    (: (hs.eventtap.event.newKeyEvent [:fn] :up
@@ -154,7 +171,11 @@
                                       :post)
                                    (: (hs.eventtap.event.newKeyEvent [:fn] :up
                                                                      false)
-                                      :post)))
+                                      :post))
+                nil
+                (fn []
+                  (: (hs.eventtap.event.newKeyEvent [:fn] :up true) :post)
+                  (: (hs.eventtap.event.newKeyEvent [:fn] :up false) :post)))
 
 (hs.hotkey.bind [:cmd :shift] :l (fn []
                                    (: (hs.eventtap.event.newKeyEvent [:fn]
@@ -163,7 +184,11 @@
                                    (: (hs.eventtap.event.newKeyEvent [:fn]
                                                                      :right
                                                                      false)
-                                      :post)))
+                                      :post))
+                nil (fn []
+                     (: (hs.eventtap.event.newKeyEvent [:fn] :right true) :post)
+                     (: (hs.eventtap.event.newKeyEvent [:fn] :right false)
+                        :post)))
 
 ;; Mouse keys: normal speed =========================
 ;; ==================================================
