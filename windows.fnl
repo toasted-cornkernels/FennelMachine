@@ -52,59 +52,51 @@
 
 (fn resize-border-up []
   (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
+        window-frame (window:frame)]
     (set window-frame.y (- window-frame.y 10))
     (set window-frame.h (+ window-frame.h 10))
     (window:setFrame window-frame)))
 
 (fn resize-border-down []
   (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
+        window-frame (window:frame)]
     (set window-frame.h (+ window-frame.h 10))
     (window:setFrame window-frame)))
 
 (fn resize-border-left []
   (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
+        window-frame (window:frame)]
     (set window-frame.x (- window-frame.x 10))
     (set window-frame.w (+ window-frame.w 10))
     (window:setFrame window-frame)))
 
 (fn resize-border-right []
   (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
+        window-frame (window:frame)]
     (set window-frame.w (+ window-frame.w 10))
     (window:setFrame window-frame)))
 
 (fn move-up []
   (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
+        window-frame (window:frame)]
     (set window-frame.y (- window-frame.y 10))
     (window:setFrame window-frame)))
 
 (fn move-down []
   (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
+        window-frame (window:frame)]
     (set window-frame.y (+ window-frame.y 10))
     (window:setFrame window-frame)))
 
 (fn move-left []
   (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
+        window-frame (window:frame)]
     (set window-frame.x (- window-frame.x 10))
     (window:setFrame window-frame)))
 
 (fn move-right []
   (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
+        window-frame (window:frame)]
     (set window-frame.x (+ window-frame.x 10))
     (window:setFrame window-frame)))
 
@@ -122,8 +114,45 @@
 ;; Do it repeatedly =================================
 ;; ==================================================
 
-(fn repeat-apply [window-adjustment x y]
-  "Repeatedly do `window-adjustment` until its position stabilizes.")
+(fn repeat-apply [window-adjustment]
+  "Repeatedly do `window-adjustment` until its position stabilizes."
+  (let [window (hs.window.focusedWindow)
+        old-window-frame (window:frame)]
+    (window-adjustment)
+    (var new-window-frame (: (hs.window.focusedWindow) :frame))
+    (while (or (not= old-window-frame.x new-window-frame.x)
+               (not= old-window-frame.y new-window-frame.y)
+               (not= old-window-frame.w new-window-frame.w)
+               (not= old-window-frame.h new-window-frame.h))
+      (window-adjustment))))
+
+(fn repeat-apply-rec [window-adjustment]
+  (let [window (hs.window.focusedWindow)
+        old-window-frame (window:frame)
+        new-window-frame (do
+                           (window-adjustment)
+                           (: (hs.window.focusedWindow) :frame))]
+    (when (or (not= old-window-frame.x new-window-frame.x)
+              (not= old-window-frame.y new-window-frame.y)
+              (not= old-window-frame.w new-window-frame.w)
+              (not= old-window-frame.h new-window-frame.h))
+      (repeat-apply-rec window-adjustment))))
+
+(macro repeated-adjustment [window-adjustment]
+  (let [fname (sym (.. window-adjustment :-repeatedly))]
+    `(fn ,fname
+       []
+       (repeat-apply ,(sym window-adjustment)))))
+
+(repeated-adjustment :resize-border-up)
+(repeated-adjustment :resize-border-down)
+(repeated-adjustment :resize-border-left)
+(repeated-adjustment :resize-border-right)
+(repeated-adjustment :move-up)
+(repeated-adjustment :move-down)
+(repeated-adjustment :move-left)
+(repeated-adjustment :move-right)
+(repeated-adjustment :center-enlarge-with-rate)
 
 ;; Shared Functions =================================
 ;; ==================================================
@@ -288,6 +317,11 @@
 
 (fn resize-half-bottom []
   (resize-window-halve :j))
+
+(repeated-adjustment :resize-half-left)
+(repeated-adjustment :resize-half-right)
+(repeated-adjustment :resize-half-top)
+(repeated-adjustment :resize-half-bottom)
 
 ;; Resize window by increments ======================
 ;; ==================================================
@@ -511,10 +545,10 @@
  : position-window-center
  : rect
  : resize-down
- : resize-half-bottom
- : resize-half-left
- : resize-half-right
- : resize-half-top
+ : resize-half-bottom-repeatedly
+ : resize-half-left-repeatedly
+ : resize-half-right-repeatedly
+ : resize-half-top-repeatedly
  : resize-inc-bottom
  : resize-inc-left
  : resize-inc-right
@@ -523,15 +557,15 @@
  : resize-right
  : resize-up
  : resize-to-grid
- : resize-border-up
- : resize-border-down
- : resize-border-left
- : resize-border-right
- : move-up
- : move-down
- : move-left
- : move-right
- : center-enlarge-with-rate
+ : resize-border-up-repeatedly
+ : resize-border-down-repeatedly
+ : resize-border-left-repeatedly
+ : resize-border-right-repeatedly
+ : move-up-repeatedly
+ : move-down-repeatedly
+ : move-left-repeatedly
+ : move-right-repeatedly
+ : center-enlarge-with-rate-repeatedly
  : set-mouse-cursor-at
  : show-display-numbers
  : show-grid
