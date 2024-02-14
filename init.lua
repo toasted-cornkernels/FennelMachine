@@ -1,4 +1,4 @@
-hs.alert.show("Spacehammer config loaded")
+hs.alert.show("(λ (f) ((λ (x) (f (x x))) (λ (x) (f (x x)))))")
 
 -- Support upcoming 5.4 release and also use luarocks' local path
 package.path = package.path .. ";" .. os.getenv("HOME") .. "/.luarocks/share/lua/5.4/?.lua;" .. os.getenv("HOME") .. "/.luarocks/share/lua/5.4/?/init.lua"
