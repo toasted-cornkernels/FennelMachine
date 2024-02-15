@@ -101,14 +101,14 @@
 ;;                   (: (hs.eventtap.event.newKeyEvent [] :delete true) :post)
 ;;                   (: (hs.eventtap.event.newKeyEvent [] :delete false) :post)))
 
-(hs.hotkey.bind [:ctrl] :j (fn []
-                             (: (hs.eventtap.event.newKeyEvent [] :return true)
-                                :post)
-                             (: (hs.eventtap.event.newKeyEvent [] :return false)
-                                :post)) nil
-                (fn []
-                  (: (hs.eventtap.event.newKeyEvent [] :return true) :post)
-                  (: (hs.eventtap.event.newKeyEvent [] :return false) :post)))
+;; (hs.hotkey.bind [:ctrl] :j (fn []
+;;                              (: (hs.eventtap.event.newKeyEvent [] :return true)
+;;                                 :post)
+;;                              (: (hs.eventtap.event.newKeyEvent [] :return false)
+;;                                 :post)) nil
+;;                 (fn []
+;;                   (: (hs.eventtap.event.newKeyEvent [] :return true) :post)
+;;                   (: (hs.eventtap.event.newKeyEvent [] :return false) :post)))
 
 (hs.hotkey.bind [:ctrl] :m (fn []
                              (: (hs.eventtap.event.newKeyEvent [] :return true)
