@@ -229,21 +229,21 @@
                                                                            false)
                                       :post)))
 
-(hs.hotkey.bind [:alt :shift] :p (fn []
-                                   (: (hs.eventtap.event.newSystemKeyEvent :PREVIOUS
-                                                                           true)
-                                      :post)
-                                   (: (hs.eventtap.event.newSystemKeyEvent :PREVIOUS
-                                                                           false)
-                                      :post)))
+;; (hs.hotkey.bind [:alt :shift] :p (fn []
+;;                                    (: (hs.eventtap.event.newSystemKeyEvent :PREVIOUS
+;;                                                                            true)
+;;                                       :post)
+;;                                    (: (hs.eventtap.event.newSystemKeyEvent :PREVIOUS
+;;                                                                            false)
+;;                                       :post)))
 
-(hs.hotkey.bind [:alt :shift] :n (fn []
-                                   (: (hs.eventtap.event.newSystemKeyEvent :NEXT
-                                                                           true)
-                                      :post)
-                                   (: (hs.eventtap.event.newSystemKeyEvent :NEXT
-                                                                           false)
-                                      :post)))
+;; (hs.hotkey.bind [:alt :shift] :n (fn []
+;;                                    (: (hs.eventtap.event.newSystemKeyEvent :NEXT
+;;                                                                            true)
+;;                                       :post)
+;;                                    (: (hs.eventtap.event.newSystemKeyEvent :NEXT
+;;                                                                            false)
+;;                                       :post)))
 
 ;; Brightness =======================================
 ;; ==================================================
@@ -295,12 +295,12 @@
 ;; Rshift+esc to tilde ==============================
 ;; ==================================================
 
-(hs.hotkey.bind [:rightshift] :escape nil
-                (fn []
-                  (: (hs.eventtap.event.newKeyEvent [:rightshift] "`" true)
-                     :post)
-                  (: (hs.eventtap.event.newKeyEvent [:rightshift] "`" false)
-                     :post)))
+;; (hs.hotkey.bind [:rightshift] :escape nil
+;;                 (fn []
+;;                   (: (hs.eventtap.event.newKeyEvent [:rightshift] "`" true)
+;;                      :post)
+;;                   (: (hs.eventtap.event.newKeyEvent [:rightshift] "`" false)
+;;                      :post)))
 
 ;; Cmd+shift+m to Shift+F10 ==========================
 ;; ==================================================
