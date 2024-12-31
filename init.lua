@@ -11,16 +11,3 @@ fennel = require("fennel")
 table.insert(package.loaders or package.searchers, fennel.searcher)
 
 require "core"
-
-local VimMode = hs.loadSpoon('VimMode')
-local vim = VimMode:new()
-
-vim
-   :disableForApp('Code')
-   :disableForApp('MacVim')
-   :disableForApp('Emacs')
-   :disableForApp('Terminal')
-   :disableForApp('zoom.us')
-   :bindHotKeys({enter = {{'option'}, '['}})
-
--- hs.loadSpoon('ControlEscape'):start()
