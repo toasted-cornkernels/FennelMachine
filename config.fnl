@@ -92,7 +92,7 @@
                [back-key
                 (app-binding :Emacs :e)
                 (app-binding :Safari :f)
-                (app-binding :Terminal :i)
+                (app-binding :Ghostty :i)
                 (app-binding :Slack :s)
                 (app-binding :Calendar :a)
                 (app-binding :Zoom :z)
@@ -306,4 +306,3 @@
 ;; ==================================================
 
 config
-
