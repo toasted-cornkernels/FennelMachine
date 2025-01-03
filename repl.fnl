@@ -4,27 +4,6 @@
 (local {:merge merge}
        (require :lib.functional))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; nREPL support
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; This module adds support to start an nREPL server. This allows a client to
-;; connect to the running server and interact with it while it is running, which
-;; can help avoid repeatedly reloading the config.
-;;
-;; Example usage:
-;;
-;; - To your ~/.spacehammer/config.fnl add:
-;;   (local repl (require :repl))
-;;   (repl.run (repl.start))
-;;
-;; repl.start takes an optional 'opts' table with the following fields:
-;; - host: Define the host to listen on (default "localhost")
-;; - port: Define the port to listen on (default 7888)
-;; - fennel: Expect fennel code (as opposed to lua) (default true)
-;; - serialize: Provide a function that converts objects to strings
-;;   (default hs.inspect)
-
 (fn fennel-middleware [f msg]
   (match msg.op
     "load-file" (let [f (assert (io.open msg.filename "rb"))]
