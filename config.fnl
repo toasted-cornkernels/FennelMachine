@@ -7,6 +7,7 @@
 (local input-method (require :input-method))
 (local display (require :display))
 (local {: concat : logf : filter : identity} (require :lib.functional))
+(local {: desparsify} (require :lib.utils))
 
 ;; Actions ==========================================
 ;; ==================================================
@@ -88,20 +89,20 @@
     {: key :title app-name :action (activate app-name)}))
 
 (local app-bindings
-       (filter identity
-               [back-key
-                (app-binding :Emacs :e)
-                (app-binding :Safari :f)
-                (app-binding :Ghostty :i)
-                (app-binding :Slack :s)
-                (app-binding :Calendar :a)
-                (app-binding :Zoom :z)
-                (app-binding :Mail :m)
-                (app-binding music-app :p)
-                (app-binding-if-exists "Visual Studio Code" :v)
-                (app-binding-if-exists "Google Chrome" :c)
-                (app-binding-if-exists "Brave Browser" :b)
-                (app-binding-if-exists :KakaoTalk :k)]))
+       (desparsify
+        [back-key
+         (app-binding :Emacs :e)
+         (app-binding :Safari :f)
+         (app-binding :Ghostty :i)
+         (app-binding :Slack :s)
+         (app-binding :Calendar :a)
+         (app-binding :Zoom :z)
+         (app-binding :Mail :m)
+         (app-binding music-app :p)
+         (app-binding-if-exists "Visual Studio Code" :v)
+         (app-binding-if-exists "Google Chrome" :c)
+         (app-binding-if-exists "Brave Browser" :b)
+         (app-binding-if-exists :KakaoTalk :k)]))
 
 (local media-bindings [back-key
                        {:key :h
