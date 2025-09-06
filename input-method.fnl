@@ -130,7 +130,7 @@
                                    (hs.keycodes.setMethod "2-Set Korean"))
                 nil nil)
 
-(hs.hotkey.bind [:cmd :shift] :l (fn []
+(hs.hotkey.bind [:cmd :shift] :e (fn []
                                    (hs.keycodes.setLayout "U.S."))
                 nil nil)
 
