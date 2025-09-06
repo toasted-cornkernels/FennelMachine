@@ -23,25 +23,6 @@
 ;; HELP
 ;; NUM_LOCK
 
-;; TODO Take apart this monolith
-(fn right-cmd-input-switch-emacs-sensitive [e]
-  (let [flags (e:getFlags)
-        current-app-name (: (hs.application.frontmostApplication) :name)]
-    (when (and flags.cmd (not (or flags.alt flags.shift flags.ctrl flags.fn)))
-      (let [key-code (e:getKeyCode)]
-        (if (= key-code 54)
-            (match (hs.keycodes.currentLayout)
-              :U.S. (if (= current-app-name :Emacs)
-                        (hs.eventtap.keyStroke {} :f6)
-                        (hs.keycodes.setMethod "2-Set Korean"))
-              "2-Set Korean" (if (= current-app-name :Emacs)
-                                 (hs.eventtap.keyStroke {} :f6)
-                                 (hs.keycodes.setLayout :U.S.))))))))
-
-(global layout-watcher (: (hs.eventtap.new [hs.eventtap.event.types.flagsChanged]
-                                           right-cmd-input-switch-emacs-sensitive)
-                          :start))
-
 ;; Mission Control ==================================
 ;; ==================================================
 
@@ -138,57 +119,20 @@
 ;;                   (: (hs.eventtap.event.newKeyEvent [:cmd] :delete true) :post)
 ;;                   (: (hs.eventtap.event.newKeyEvent [:cmd] :delete false) :post)))
 
-;; Arrow keys =======================================
+;; Input Methods ====================================
 ;; ==================================================
 
-(hs.hotkey.bind [:cmd :shift] :h (fn []
-                                   (: (hs.eventtap.event.newKeyEvent [:fn]
-                                                                     :left true)
-                                      :post)
-                                   (: (hs.eventtap.event.newKeyEvent [:fn]
-                                                                     :left false)
-                                      :post))
-                nil
-                (fn []
-                  (: (hs.eventtap.event.newKeyEvent [:fn] :left true) :post)
-                  (: (hs.eventtap.event.newKeyEvent [:fn] :left false) :post)))
-
 (hs.hotkey.bind [:cmd :shift] :j (fn []
-                                   (: (hs.eventtap.event.newKeyEvent [:fn]
-                                                                     :down true)
-                                      :post)
-                                   (: (hs.eventtap.event.newKeyEvent [:fn]
-                                                                     :down false)
-                                      :post))
-                nil
-                (fn []
-                  (: (hs.eventtap.event.newKeyEvent [:fn] :down true) :post)
-                  (: (hs.eventtap.event.newKeyEvent [:fn] :down false) :post)))
+                                   (hs.keycodes.setMethod "ひらがな"))
+                nil nil)
 
 (hs.hotkey.bind [:cmd :shift] :k (fn []
-                                   (: (hs.eventtap.event.newKeyEvent [:fn] :up
-                                                                     true)
-                                      :post)
-                                   (: (hs.eventtap.event.newKeyEvent [:fn] :up
-                                                                     false)
-                                      :post))
-                nil
-                (fn []
-                  (: (hs.eventtap.event.newKeyEvent [:fn] :up true) :post)
-                  (: (hs.eventtap.event.newKeyEvent [:fn] :up false) :post)))
+                                   (hs.keycodes.setMethod "2-Set Korean"))
+                nil nil)
 
 (hs.hotkey.bind [:cmd :shift] :l (fn []
-                                   (: (hs.eventtap.event.newKeyEvent [:fn]
-                                                                     :right true)
-                                      :post)
-                                   (: (hs.eventtap.event.newKeyEvent [:fn]
-                                                                     :right
-                                                                     false)
-                                      :post))
-                nil (fn []
-                     (: (hs.eventtap.event.newKeyEvent [:fn] :right true) :post)
-                     (: (hs.eventtap.event.newKeyEvent [:fn] :right false)
-                        :post)))
+                                   (hs.keycodes.setLayout "U.S."))
+                nil nil)
 
 ;; Mouse keys: normal speed =========================
 ;; ==================================================
