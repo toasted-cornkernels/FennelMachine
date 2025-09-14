@@ -82,14 +82,6 @@
                   (: (hs.eventtap.event.newKeyEvent [] :delete true) :post)
                   (: (hs.eventtap.event.newKeyEvent [] :delete false) :post)))
 
-;; (hs.hotkey.bind [:ctrl] :j (fn []
-;;                              (: (hs.eventtap.event.newKeyEvent [] :return true)
-;;                                 :post)
-;;                              (: (hs.eventtap.event.newKeyEvent [] :return false)
-;;                                 :post)) nil
-;;                 (fn []
-;;                   (: (hs.eventtap.event.newKeyEvent [] :return true) :post)
-;;                   (: (hs.eventtap.event.newKeyEvent [] :return false) :post)))
 
 (hs.hotkey.bind [:ctrl] :m (fn []
                              (: (hs.eventtap.event.newKeyEvent [] :return true)
@@ -110,15 +102,6 @@
                   (: (hs.eventtap.event.newKeyEvent [] :escape true) :post)
                   (: (hs.eventtap.event.newKeyEvent [] :escape false) :post)))
 
-;; (hs.hotkey.bind [:ctrl] :u (fn []
-;;                              (: (hs.eventtap.event.newKeyEvent [:cmd] :delete true)
-;;                                 :post)
-;;                              (: (hs.eventtap.event.newKeyEvent [:cmd] :delete false)
-;;                                 :post)) nil
-;;                 (fn []
-;;                   (: (hs.eventtap.event.newKeyEvent [:cmd] :delete true) :post)
-;;                   (: (hs.eventtap.event.newKeyEvent [:cmd] :delete false) :post)))
-
 ;; Input Methods ====================================
 ;; ==================================================
 
@@ -130,19 +113,9 @@
                                    (hs.keycodes.setMethod "2-Set Korean"))
                 nil nil)
 
-(hs.hotkey.bind [:cmd :shift] :e (fn []
+(hs.hotkey.bind [:cmd :shift] :l (fn []
                                    (hs.keycodes.setLayout "U.S."))
                 nil nil)
-
-;; Mouse keys: normal speed =========================
-;; ==================================================
-
-:TODO
-
-;; Mouse keys: fast speed ===========================
-;; ==================================================
-
-:TODO
 
 ;; Volume keys ======================================
 ;; ==================================================
@@ -172,22 +145,6 @@
                                    (: (hs.eventtap.event.newSystemKeyEvent :PAUSE
                                                                            false)
                                       :post)))
-
-;; (hs.hotkey.bind [:alt :shift] :p (fn []
-;;                                    (: (hs.eventtap.event.newSystemKeyEvent :PREVIOUS
-;;                                                                            true)
-;;                                       :post)
-;;                                    (: (hs.eventtap.event.newSystemKeyEvent :PREVIOUS
-;;                                                                            false)
-;;                                       :post)))
-
-;; (hs.hotkey.bind [:alt :shift] :n (fn []
-;;                                    (: (hs.eventtap.event.newSystemKeyEvent :NEXT
-;;                                                                            true)
-;;                                       :post)
-;;                                    (: (hs.eventtap.event.newSystemKeyEvent :NEXT
-;;                                                                            false)
-;;                                       :post)))
 
 ;; Brightness =======================================
 ;; ==================================================
