@@ -279,12 +279,18 @@
                              :action "slack:up"
                              :repeat true}]})
 
+(local chatgpt-config {:key :ChatGPT
+                       :keys [{:mods [:ctrl]
+                               :key :l
+                               :action "chatgpt:focus-composer"}]})
+
 (local apps [brave-config
              chrome-config
              firefox-config
              emacs-config
              hammerspoon-config
-             slack-config])
+             slack-config
+             chatgpt-config])
 
 (local config {:title "Main Menu"
                :items menu-items
