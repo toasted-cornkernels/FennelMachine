@@ -235,4 +235,8 @@ echo line such as `SPC w-` underneath.
  : hide
  :current (fn [] canvas)
  : menu-entries
- : emacs-key}
+ : emacs-key
+ : palette
+ : font-name
+ : font-size
+ : char-width}

@@ -21,8 +21,7 @@ menu items and a visible Dock. Type a label to act on it:
 | =Cmd= + last char    | Cmd-click, e.g. open a link in a new tab                  |
 | =Ctrl= + last char   | double click                                              |
 | =Alt= + last char    | move the pointer there without clicking                   |
-| =/= text =RET=       | search by element text; =RET= clicks the only match or    |
-|                      | relabels the matches                                      |
+| =/=                  | switch to the minibuffer search (=Ctrl-Alt-SPC=, below)   |
 | =DEL=                | delete the last typed character                           |
 | =ESC=, =C-g=, hotkey | cancel; any other key cancels and goes through            |
 
@@ -47,6 +46,33 @@ cross-platform toolkits) get few or no hints. Electron apps are asked to build
 their tree (=AXManualAccessibility=) on first use, so the first invocation there
 may miss web content. Context menus opened by a right click can't be hinted;
 use the arrow keys or type-ahead there.
+
+** Search (=Ctrl-Alt-SPC=) in the minibuffer, and the echo area
+
+Like [[https://shortcat.app][Shortcat]], =Ctrl-Alt-SPC= searches what you can click by its text.
+The query is read in an Emacs style minibuffer (=lib/minibuffer.fnl=) along the
+bottom of the screen with vertico/orderless style completion: space-separated
+terms match in any order. Candidates are the clickable elements on screen
+(annotated with their role and app), the windows, and every enabled menu item of
+the frontmost app, closed menus included (=File › Save As…=, annotated with its
+shortcut in Emacs notation, e.g. =s-S=). Matches on screen are outlined and the
+selection is highlighted.
+
+| Key                                 | Action                                     |
+|-------------------------------------+--------------------------------------------|
+| =C-n= =C-p=, =TAB= =S-TAB=, arrows  | next / previous candidate                  |
+| =C-v= =M-v=                         | a page down / up                           |
+| =RET=                               | click, choose the menu item, focus window  |
+| =S-RET= =s-RET= =C-RET= =M-RET=     | right click, Cmd-click, double click, move |
+| =C-a= =C-e= =C-b= =C-f= =M-b= =M-f= | move point                                 |
+| =DEL= =C-d= =M-DEL= =C-w= =M-d=     | delete / kill backward and forward         |
+| =C-k= =C-u= =C-y=, =s-v=            | kill line, yank (or paste the clipboard)   |
+| =C-g=, =ESC=                        | quit                                       |
+
+The same strip doubles as the echo area: the global =alert= (used throughout this
+config) and the hints' messages show there for a few seconds, and are printed to
+the Hammerspoon console, which plays the part of =*Messages*=. While the
+minibuffer is active, a message appears after the input as =[message]=.
 
 ** Application modes (=Cmd-SPC m=)
 

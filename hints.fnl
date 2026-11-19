@@ -12,12 +12,19 @@ API. Typing a label acts on the element:
   Ctrl + last      double click
   Alt + last       move the pointer there without clicking
   DEL              delete the last typed character
-  /                search: type part of an element's text to narrow the
-                   hints, RET clicks the only match or relabels the matches
+  /                switch to `search`
   ESC / C-g        cancel
 
 Synthetic clicks put the pointer back where it was.
+
+`search` is a Shortcat style alternative in the minibuffer (lib/minibuffer.fnl):
+type part of the text of anything clickable on screen, a window title or a menu
+item of the frontmost app. Matches on screen are outlined; RET acts on the
+selected one, with the same modifiers as above.
 "
+
+(local minibuffer (require :lib.minibuffer))
+(local which-key (require :lib.which-key))
 
 (local log (hs.logger.new "hints.fnl" "info"))
 (local types hs.eventtap.event.types)
@@ -208,7 +215,8 @@ Synthetic clicks put the pointer back where it was.
   (let [roots []
         frames []]
     (each [_ app (ipairs (hs.application.runningApplications))]
-      (when (= (: app :kind) 0)
+      ;; Hammerspoon is an agent app too: skip our own overlays.
+      (when (and (= (: app :kind) 0) (not= (: app :pid) hs.processInfo.processID))
         (each [_ win (ipairs (or (app-attribute app :AXWindows) []))]
           (when (not (. skipped-panel-subroles (attr win :AXSubrole)))
             (let [covered (icollect [_ el (ipairs [win (table.unpack (or (attr win :AXChildren) []))])]
@@ -392,55 +400,35 @@ Synthetic clicks put the pointer back where it was.
         text)))
 
 (fn element-text [element]
-  "Lower-cased text describing ELEMENT and its first two levels of children,
-  e.g. a Finder row's file name or a link's text."
-  (let [parts []]
+  "Text describing ELEMENT and its first two levels of children, e.g. a Finder
+  row's file name or a link's text, without repeats."
+  (let [parts []
+        seen {}]
     (fn add [e depth]
       (each [_ name (ipairs [:AXTitle :AXDescription :AXValue :AXHelp])]
         (let [value (attr e name)]
-          (when (= (type value) :string)
+          (when (and (= (type value) :string) (value:find "%S")
+                     (not (. seen value)))
+            (tset seen value true)
             (table.insert parts (value:sub 1 200)))))
       ;; A menu bar item's menu would match everything inside it.
       (when (and (< depth 2) (not= (attr e :AXRole) :AXMenuBarItem))
         (each [_ child (ipairs (or (attr e :AXChildren) []))]
           (add child (+ depth 1)))))
     (add element 0)
-    (string.lower (table.concat parts " "))))
+    (table.concat parts " ")))
 
 (fn visible-hints []
-  "Hints matching the typed label prefix and, while searching, the query."
-  (let [typed state.typed
-        query (and state.query (string.lower state.query))]
+  "Hints matching the typed label prefix."
+  (let [typed state.typed]
     (icollect [_ hint (ipairs state.hints)]
-      (when (and (= (hint.label:sub 1 (length typed)) typed)
-                 (or (not query) (hint.text:find query 1 true)))
+      (when (= (hint.label:sub 1 (length typed)) typed)
         hint))))
 
-(fn echo-element [canvas-frame]
-  (let [text (.. "/" state.query)
-        w (+ (* (math.max 20 (+ (utf8.len text) 2)) char-size.w) (* 4 pad-x))
-        h (+ char-size.h (* 4 pad-y))]
-    [{:type :rectangle
-      :frame {:x (/ (- canvas-frame.w w) 2) :y (- canvas-frame.h h 60) : w : h}
-      :roundedRectRadii {:xRadius 4 :yRadius 4}
-      :fillColor {:hex "#161623"}
-      :strokeColor {:hex palette.bg}
-      :strokeWidth 1}
-     {:type :text
-      :frame {:x (+ (/ (- canvas-frame.w w) 2) (* 2 pad-x))
-              :y (+ (- canvas-frame.h h 60) (* 2 pad-y))
-              :w (- w (* 4 pad-x)) :h char-size.h}
-      :text (hs.styledtext.new text {:font {:name font-name :size font-size}
-                                     :color {:hex "#c1cbf1"}})}]))
-
 (fn render []
-  (let [visible (visible-hints)
-        main-screen (: (hs.screen.mainScreen) :fullFrame)]
+  (let [visible (visible-hints)]
     (each [_ {: canvas : frame} (ipairs state.canvases)]
-      (let [elements (if (and state.query (= frame.x main-screen.x)
-                              (= frame.y main-screen.y))
-                         (echo-element frame)
-                         [])]
+      (let [elements []]
         (each [_ hint (ipairs visible)]
           (let [r (label-rect hint)]
             (when (inside? frame (center r))
@@ -497,43 +485,160 @@ Synthetic clicks put the pointer back where it was.
             (activate-hint hint flags))
           (render)))))
 
-(fn start-search []
-  (each [_ hint (ipairs state.hints)]
-    (when (not hint.text)
-      (set hint.text (element-text hint.element))))
-  (set state.query "")
-  (set state.typed "")
-  (render))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Search (Shortcat style, in the minibuffer)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(fn finish-search [flags]
-  "Click the only match, or give the matches fresh, shorter labels."
-  (let [matches (visible-hints)
-        n (length matches)]
-    (if (= n 0) nil
-        (= n 1) (let [hint (. matches 1)]
-                  (hide-hints)
-                  (activate-hint hint flags))
-        (let [labels (make-labels n)]
-          (each [i hint (ipairs matches)]
-            (set hint.label (. labels i)))
-          (set state.hints matches)
-          (set state.query nil)
-          (render)))))
+(fn annotation [...]
+  (let [parts (table.pack ...)]
+    (table.concat (fcollect [i 1 parts.n]
+                    (let [part (. parts i)]
+                      (when (and part (not= part "")) part)))
+                  "  ")))
 
-(fn on-search-key [event key flags]
-  (if (= key :delete)
-      (do
-        (set state.query (if (= state.query "") nil
-                             (let [n (utf8.len state.query)]
-                               (state.query:sub 1 (- (utf8.offset state.query n) 1)))))
-        (render))
-      (or (= key :return) (= key :padenter))
-      (finish-search flags)
-      (not (or flags.cmd flags.ctrl))
-      (let [chars (: event :getCharacters)]
-        (when (and chars (not= chars "") (not (chars:match "%c")))
-          (set state.query (.. state.query chars))
-          (render)))))
+(fn app-name-for [element names]
+  "Name of the app owning ELEMENT, cached in NAMES by pid."
+  (let [(ok pid) (pcall #(: element :pid))]
+    (when ok
+      (when (= (. names pid) nil)
+        (let [app (hs.application.applicationForPID pid)]
+          (tset names pid (or (and app (: app :name)) false))))
+      (or (. names pid) nil))))
+
+(fn element-candidates [names]
+  (icollect [_ hint (ipairs (collect-candidates))]
+    (let [text (element-text hint.element)
+          role (or (attr hint.element :AXRoleDescription) hint.role)]
+      {:text (if (= text "") role text)
+       :annotation (annotation role (app-name-for hint.element names))
+       :kind :element
+       : hint})))
+
+(fn shortcut [item]
+  "A menu item's key equivalent in Emacs notation, e.g. s-S for Cmd-Shift-S."
+  (let [char (attr item :AXMenuItemCmdChar)
+        flags (or (attr item :AXMenuItemCmdModifiers) 0)
+        mods (icollect [_ [bit mod] (ipairs [[4 :ctrl] [2 :alt] [1 :shift]])]
+               (when (not= 0 (band flags bit)) mod))]
+    (when (and (= (type char) :string) (char:match "^%S$"))
+      (when (= 0 (band flags 8))
+        (table.insert mods :cmd))
+      (which-key.emacs-key mods (if (hs.fnutils.contains mods :shift)
+                                    char
+                                    (char:lower))))))
+
+(fn menu-candidates [app]
+  "Enabled items of APP's menus, closed ones included, as File › Save As…"
+  (let [acc []
+        app-name (: app :name)]
+    (fn walk [menu path depth]
+      (each [_ item (ipairs (or (attr menu :AXChildren) []))]
+        (let [title (attr item :AXTitle)]
+          (when (and (= (type title) :string) (not= title "")
+                     (not= title "Services"))
+            (let [label (.. path " › " title)
+                  submenu (. (or (attr item :AXChildren) []) 1)]
+              (if submenu
+                  (when (< depth 4) (walk submenu label (+ depth 1)))
+                  (attr item :AXEnabled)
+                  (table.insert acc {:text label
+                                     :annotation (annotation (shortcut item)
+                                                             "menu item" app-name)
+                                     :kind :menu
+                                     :element item})))))))
+    (let [bar (attr (hs.axuielement.applicationElement app) :AXMenuBar)]
+      (each [_ top (ipairs (or (and bar (attr bar :AXChildren)) []))]
+        (let [submenu (. (or (attr top :AXChildren) []) 1)]
+          (when submenu
+            (walk submenu (or (attr top :AXTitle) "") 1)))))
+    acc))
+
+(fn window-candidates []
+  (icollect [_ win (ipairs (hs.window.orderedWindows))]
+    (let [app (: win :application)
+          app-name (or (and app (: app :name)) "")
+          title (or (: win :title) "")]
+      {:text (if (= title "") app-name title)
+       :annotation (annotation "window" app-name)
+       :kind :window
+       : win})))
+
+(fn search-candidates []
+  (let [names {}
+        front (hs.application.frontmostApplication)
+        acc (element-candidates names)]
+    (each [_ c (ipairs (window-candidates))]
+      (table.insert acc c))
+    (when front
+      (each [_ c (ipairs (menu-candidates front))]
+        (table.insert acc c)))
+    acc))
+
+(var search-canvases nil)
+
+(fn hide-search-overlay []
+  (when search-canvases
+    (each [_ {: canvas} (ipairs search-canvases)]
+      (: canvas :delete))
+    (set search-canvases nil)))
+
+(local max-outlines 200)
+
+(fn outline [rect frame selected?]
+  {:type :rectangle
+   :frame {:x (- rect.x frame.x) :y (- rect.y frame.y) :w rect.w :h rect.h}
+   :roundedRectRadii {:xRadius 3 :yRadius 3}
+   :fillColor {:hex palette.bg :alpha (if selected? 0.3 0)}
+   :strokeColor {:hex palette.bg :alpha (if selected? 1 0.8)}
+   :strokeWidth (if selected? 4 2)})
+
+(fn render-search [matches selected input]
+  "Outline the on-screen matches once something is typed, and the selection."
+  (when search-canvases
+    (let [rects []]
+      (when (not= input "")
+        (each [i c (ipairs matches) &until (> i max-outlines)]
+          (when (and (= c.kind :element) (not= c selected))
+            (table.insert rects [c.hint.frame false]))))
+      (when selected
+        (if (= selected.kind :element)
+            (table.insert rects [selected.hint.frame true])
+            (= selected.kind :window)
+            (table.insert rects [(: selected.win :frame) true])))
+      (each [_ {: canvas : frame} (ipairs search-canvases)]
+        (let [elements (icollect [_ [rect selected?] (ipairs rects)]
+                         (when (intersection rect frame)
+                           (outline rect frame selected?)))]
+          ;; replaceElements rejects an empty list.
+          (while (> (length canvas) 0) (: canvas :removeElement))
+          (when (> (length elements) 0)
+            (: canvas :replaceElements elements)))))))
+
+(fn accept-search [candidate input flags]
+  (hide-search-overlay)
+  (if (not candidate)
+      (when (not= input "") (minibuffer.message (.. "No match for " input)))
+      (= candidate.kind :element) (activate-hint candidate.hint flags)
+      (= candidate.kind :menu)
+      (when (not (press candidate.element))
+        (minibuffer.message (.. "Could not choose " candidate.text)))
+      (= candidate.kind :window) (: candidate.win :focus)))
+
+(fn search []
+  "Shortcat style search in the minibuffer: type part of the text of anything
+  clickable on screen, a window title or a menu item of the frontmost app; RET
+  acts on the selection with the same modifiers as hint labels."
+  (hide-hints)
+  (hide-search-overlay)
+  (set search-canvases (make-canvases))
+  (minibuffer.completing-read "Click: " nil
+                              {:on-accept accept-search
+                               :on-cancel hide-search-overlay
+                               :on-change render-search})
+  ;; Let the minibuffer appear before the slower accessibility walk.
+  (hs.timer.doAfter 0.01
+                    #(when (minibuffer.active?)
+                       (minibuffer.set-collection (search-candidates)))))
 
 (fn on-key [event]
   "Swallow the keys used for hints; any other key closes the hints and goes
@@ -549,11 +654,10 @@ Synthetic clicks put the pointer back where it was.
         (and flags.cmd (= key :space))
         (do (when (not autorepeat?) (hide-hints)) true)
         ;; Cmd + a label character is a Cmd-click, but other Cmd shortcuts
-        ;; (with Shift, or while searching) belong to the system.
-        (and flags.cmd (or flags.shift state.query))
+        ;; (with Shift) belong to the system.
+        (and flags.cmd flags.shift)
         (do (hide-hints) false)
-        state.query (do (on-search-key event key flags) true)
-        (= key "/") (do (start-search) true)
+        (= key "/") (do (hide-hints) (search) true)
         (= key :delete)
         (do
           (set state.typed (state.typed:sub 1 -2))
@@ -569,7 +673,7 @@ Synthetic clicks put the pointer back where it was.
   (hide-hints)
   (let [candidates (collect-candidates)]
     (if (= (length candidates) 0)
-        (hs.alert.show "No clickable elements found")
+        (minibuffer.message "No clickable elements found")
         (let [labels (make-labels (length candidates))]
           (each [i c (ipairs candidates)]
             (set c.label (. labels i)))
@@ -728,7 +832,7 @@ Synthetic clicks put the pointer back where it was.
   (hide-hints)
   (let [areas (scroll-areas)]
     (if (= (length areas) 0)
-        (hs.alert.show "Nothing to scroll")
+        (minibuffer.message "Nothing to scroll")
         (do
           (set state {:areas areas
                       :index 1
@@ -741,5 +845,6 @@ Synthetic clicks put the pointer back where it was.
 {: show-hints
  : hide-hints
  : scroll-mode
+ : search
  : make-labels
  :current (fn [] state)}

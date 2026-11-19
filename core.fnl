@@ -36,14 +36,15 @@
 
 "
 alert :: str, { style }, seconds -> nil
-Shortcut for showing an alert on the primary screen for a specified duration
-Takes a message string, a style table, and the number of seconds to show alert
+Shows a message in the echo area at the bottom of the screen for a specified
+duration, like Emacs' `message`. STYLE is accepted for compatibility with
+hs.alert and ignored.
 Returns nil. This function causes side-effects.
 "
 
 (global alert
         (afn alert [str style seconds]
-             (hs.alert.show str style (hs.screen.primaryScreen) seconds)))
+             ((. (require :lib.minibuffer) :message) str seconds)))
 
 (global fw hs.window.focusedWindow)
 

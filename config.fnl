@@ -189,6 +189,9 @@
                       {:mods [:cmd :shift]
                        :key :j
                        :action "hints:scroll-mode"}
+                      {:mods [:ctrl :alt]
+                       :key :space
+                       :action "hints:search"}
                       {:mods [:cmd :ctrl]
                        :key :delete
                        :action (activate :Brave)}
