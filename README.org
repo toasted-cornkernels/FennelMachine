@@ -74,6 +74,32 @@ config) and the hints' messages show there for a few seconds, and are printed to
 the Hammerspoon console, which plays the part of =*Messages*=. While the
 minibuffer is active, a message appears after the input as =[message]=.
 
+** Keyboard Shortcuts commands (=Cmd-SPC k=)
+
+=Cmd-SPC k= reads any command of System Settings › Keyboard › Keyboard Shortcuts in
+the minibuffer (=system-shortcuts.fnl=), annotated with its category and current
+shortcut (=(off)= when disabled), plus the frontmost app's Services. =RET= runs it,
+whether or not it has a shortcut and whether or not that shortcut is enabled.
+
+The list is read from System Settings' own table
+(=/System/Library/ExtensionKit/Extensions/KeyboardSettings.appex=), so it follows
+the macOS version and language; only existing desktops are offered for =Switch to
+Desktop N=. A command runs by temporarily binding its symbolic hotkey to a spare
+chord (Hyper-fn-F19) through the private CGS API, called from JavaScript for
+Automation, posting that chord and restoring the original binding 0.25 s later.
+This only touches the WindowServer's copy; the preferences are never written, so a
+crash in between is undone at the next login. It also works when the system
+shortcut collides with a Hammerspoon hotkey, e.g. Spotlight's =Cmd-SPC=.
+
+To bind one directly in =config.fnl=:
+
+#+begin_src fennel
+{:key :n :title "Notification Center"
+ :action ((. (require :system-shortcuts) :action) "Show Notification Center")}
+#+end_src
+
+App Shortcuts are ordinary menu items, which the search (=Ctrl-Alt-SPC=) finds.
+
 ** Application modes (=Cmd-SPC m=)
 
 Like Emacs major modes, the frontmost application selects a local keymap. =Cmd-SPC m=

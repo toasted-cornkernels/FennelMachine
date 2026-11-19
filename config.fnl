@@ -177,7 +177,10 @@
         {:key :p :title :Media :items media-bindings}
         {:key :m :title :Mode :menu-fn modes.local-leader}
         {:key :x :title :Emacs :items emacs-bindings}
-        {:key :d :title :Display :items display-bindings}])
+        {:key :d :title :Display :items display-bindings}
+        {:key :k
+         :title "Keyboard Shortcuts"
+         :action "system-shortcuts:execute"}])
 
 (local agnostic-keys [{:mods [:cmd]
                        :key :space
