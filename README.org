@@ -10,8 +10,9 @@ When git-cloning, clone the submodules with ~git clone --recursive~.
 
 =hints.fnl= is a Homerow / Vimium style layer built on the Accessibility API.
 =Cmd-Shift-SPC= labels every clickable element on screen: the visible parts of all
-windows (covered elements are skipped), the frontmost app's menu bar and any open
-menu, status menu items and a visible Dock. Type a label to act on it:
+windows (covered elements are skipped), panels of menu-bar apps such as the emoji
+picker (=Cmd-Ctrl-SPC=), the frontmost app's menu bar and any open menu, status
+menu items and a visible Dock. Type a label to act on it:
 
 | Key                  | Action                                                    |
 |----------------------+-----------------------------------------------------------|

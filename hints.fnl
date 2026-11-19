@@ -1,9 +1,10 @@
 "
 Homerow / Vimium style keyboard hints for macOS.
 
-`show-hints` labels the clickable elements on screen (the windows, the
-frontmost app's menu bar, status menus and the Dock) with short home-row
-labels found through the Accessibility API. Typing a label acts on the element:
+`show-hints` labels the clickable elements on screen (the windows, panels of
+menu-bar apps such as the emoji picker, the frontmost app's menu bar, status
+menus and the Dock) with short home-row labels found through the Accessibility
+API. Typing a label acts on the element:
 
   label            click (AXPress when the element supports it)
   Shift + last     right click
@@ -51,6 +52,14 @@ Synthetic clicks put the pointer back where it was.
         y2 (math.min (+ a.y a.h) (+ b.y b.h))]
     (when (and (> x2 x1) (> y2 y1))
       {:x x1 :y y1 :w (- x2 x1) :h (- y2 y1)})))
+
+(fn bounds [rects]
+  "The smallest rectangle containing every one of RECTS."
+  (let [x1 (math.min (table.unpack (icollect [_ r (ipairs rects)] r.x)))
+        y1 (math.min (table.unpack (icollect [_ r (ipairs rects)] r.y)))
+        x2 (math.max (table.unpack (icollect [_ r (ipairs rects)] (+ r.x r.w))))
+        y2 (math.max (table.unpack (icollect [_ r (ipairs rects)] (+ r.y r.h))))]
+    {:x x1 :y y1 :w (- x2 x1) :h (- y2 y1)}))
 
 (fn inside? [rect point]
   (and (>= point.x rect.x) (< point.x (+ rect.x rect.w))
@@ -152,11 +161,11 @@ Synthetic clicks put the pointer back where it was.
   (let [screen (or (hs.screen.find (center rect)) (hs.screen.mainScreen))]
     (intersection rect (: screen :fullFrame))))
 
-(fn window-roots []
+(fn window-roots [floating]
   "Visible standard windows, front to back, each clipped to its screen and
-  occluded by the windows in front of it."
+  occluded by the windows in front of it and by the FLOATING panel frames."
   (let [roots []
-        occluders []]
+        occluders (icollect [_ o (ipairs floating)] o)]
     (each [_ win (ipairs (hs.window.orderedWindows))]
       (when (< (length roots) max-windows)
         (let [frame (: win :frame)
@@ -170,35 +179,61 @@ Synthetic clicks put the pointer back where it was.
     roots))
 
 (fn screen-clip []
-  (let [frames (icollect [_ s (ipairs (hs.screen.allScreens))] (: s :fullFrame))
-        x1 (math.min (table.unpack (icollect [_ f (ipairs frames)] f.x)))
-        y1 (math.min (table.unpack (icollect [_ f (ipairs frames)] f.y)))
-        x2 (math.max (table.unpack (icollect [_ f (ipairs frames)] (+ f.x f.w))))
-        y2 (math.max (table.unpack (icollect [_ f (ipairs frames)] (+ f.y f.h))))]
-    {:x x1 :y y1 :w (- x2 x1) :h (- y2 y1)}))
+  (bounds (icollect [_ s (ipairs (hs.screen.allScreens))] (: s :fullFrame))))
 
 (local unresponsive-pids {})
 
-(fn chrome-roots []
+(fn app-attribute [app name]
+  "Read attribute NAME of APP's accessibility element. Some processes never
+  answer accessibility requests (e.g. WebKit content processes); they are asked
+  once with a short timeout and skipped from then on."
+  (when (not (. unresponsive-pids (: app :pid)))
+    (let [element (hs.axuielement.applicationElement app)
+          _ (pcall #(: element :setTimeout 0.1))
+          started (now)
+          value (attr element name)]
+      (when (> (- (now) started) 5e7)
+        (tset unresponsive-pids (: app :pid) true))
+      value)))
+
+;; Windows of agent apps that are drawn as overlays rather than panels.
+(local skipped-panel-subroles {:AXUnknown true})
+
+(fn panel-roots [clip]
+  "Windows of agent (menu-bar-only) apps, which `hs.window.orderedWindows`
+  leaves out, e.g. the Emoji & Symbols picker and Character Viewer. A popover
+  can extend far past its anchor window, so each panel is clipped to the
+  bounds of its window and popovers. Returns the roots and the frames they
+  cover."
+  (let [roots []
+        frames []]
+    (each [_ app (ipairs (hs.application.runningApplications))]
+      (when (= (: app :kind) 0)
+        (each [_ win (ipairs (or (app-attribute app :AXWindows) []))]
+          (when (not (. skipped-panel-subroles (attr win :AXSubrole)))
+            (let [covered (icollect [_ el (ipairs [win (table.unpack (or (attr win :AXChildren) []))])]
+                            (when (or (= el win) (= (attr el :AXRole) :AXPopover))
+                              (attr el :AXFrame)))
+                  panel-clip (and (> (length covered) 0)
+                                  (intersection clip (bounds covered)))]
+              (when panel-clip
+                (table.insert roots {:element win :clip panel-clip :occluders []})
+                (each [_ frame (ipairs covered)]
+                  (table.insert frames frame))))))))
+    (values roots frames)))
+
+(fn chrome-roots [clip]
   "The frontmost app's menu bar, every app's status menu items and the Dock."
-  (let [clip (screen-clip)
-        roots []
+  (let [roots []
         front (hs.application.frontmostApplication)]
     (when front
       (let [menubar (attr (hs.axuielement.applicationElement front) :AXMenuBar)]
         (when menubar
           (table.insert roots {:element menubar : clip :occluders []}))))
-    ;; Background-only processes never own menu extras. Some processes never
-    ;; answer accessibility requests (e.g. WebKit content processes); they are
-    ;; asked once with a short timeout and skipped from then on.
+    ;; Background-only processes never own menu extras.
     (each [_ app (ipairs (hs.application.runningApplications))]
-      (when (and (>= (: app :kind) 0) (not (. unresponsive-pids (: app :pid))))
-        (let [element (hs.axuielement.applicationElement app)
-              _ (pcall #(: element :setTimeout 0.1))
-              started (now)
-              extras (attr element :AXExtrasMenuBar)]
-          (when (> (- (now) started) 5e7)
-            (tset unresponsive-pids (: app :pid) true))
+      (when (>= (: app :kind) 0)
+        (let [extras (app-attribute app :AXExtrasMenuBar)]
           (when extras
             ;; The container reports a bogus off-screen frame; its items don't.
             (each [_ item (ipairs (or (attr extras :AXChildren) []))]
@@ -238,10 +273,14 @@ Synthetic clicks put the pointer back where it was.
   (wake-web-content)
   (let [acc []
         budget {:visited 0 :deadline (+ (now) time-budget-ns)}
-        started (now)]
-    (each [_ root (ipairs (window-roots))]
+        started (now)
+        clip (screen-clip)
+        (panels floating) (panel-roots clip)]
+    (each [_ root (ipairs panels)]
       (collect-tree root.element root acc budget))
-    (each [_ root (ipairs (chrome-roots))]
+    (each [_ root (ipairs (window-roots floating))]
+      (collect-tree root.element root acc budget))
+    (each [_ root (ipairs (chrome-roots clip))]
       (collect-tree root.element root acc budget))
     (let [result (dedupe acc)]
       (log.df "%d hints from %d elements in %.0f ms" (length result)
