@@ -140,19 +140,9 @@
 ;; Shared Functions =================================
 ;; ==================================================
 
-(fn highlight-active-window []
-  "Draw a border around the active window for a short period to highlight"
-  (let [rect (hs.drawing.rectangle (: (hs.window.focusedWindow) :frame))]
-    (: rect :setStrokeColor {:red 1 :blue 0 :green 1 :alpha 1})
-    (: rect :setStrokeWidth 5)
-    (: rect :setFill false)
-    (: rect :show)
-    (hs.timer.doAfter 0.3 (fn [] (: rect :delete)))))
-
 (fn maximize-window-frame []
   (: history :push)
-  (: (hs.window.focusedWindow) :maximize 0)
-  (highlight-active-window))
+  (: (hs.window.focusedWindow) :maximize 0))
 
 (fn minimize-window-frame []
   (: (hs.window.focusedWindow) :minimize))
@@ -170,8 +160,7 @@
         update {:w (* w-percent frame.w) :h (* h-percent frame.h) :x 0 :y 0}]
     (doto window
       (: :setFrameInScreenBounds update)
-      (: :centerOnScreen))
-    (highlight-active-window)))
+      (: :centerOnScreen))))
 
 (fn center-window-frame []
   (: history :push)
@@ -189,7 +178,6 @@
   (let [app (hs.application.find app-name)]
     (when app
       (: app :activate)
-      (hs.timer.doAfter 0.05 highlight-active-window)
       (: app :unhide))))
 
 (fn set-mouse-cursor-at [app-title]
@@ -220,8 +208,7 @@
   (let [dir {:h :West :j :South :k :North :l :East}
         space (. (hs.window.focusedWindow) :filter :defaultCurrentSpace)
         fn-name (.. :focusWindow (. dir arrow))]
-    (: space fn-name nil true true)
-    (highlight-active-window)))
+    (: space fn-name nil true true)))
 
 (fn jump-window-left []
   (jump-window :h))
@@ -487,7 +474,6 @@
                 : enter-window-menu
                 : exit-window-menu
                 : hide-display-numbers
-                : highlight-active-window
                 : init
                 : jump
                 : jump-to-last-window
