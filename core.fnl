@@ -142,7 +142,7 @@ Returns nil. This function causes side-effects.
 
 ;; Initialize our modules that depend on config
 (local modules [:lib.hyper :vim :windows :apps :lib.bind :lib.modal :lib.apps
-                :lib.modes])
+                :lib.modes :clipboard])
 
 (defadvice get-config-impl
   []

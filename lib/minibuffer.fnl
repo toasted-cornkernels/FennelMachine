@@ -173,14 +173,42 @@ in any order, anywhere in a candidate.
                (+ total 1)))))
   total)
 
+(fn normalize [candidate]
+  (set candidate.text (candidate.text:gsub "%s+" " "))
+  (set candidate.haystack
+       (: (if candidate.keywords (.. candidate.text " " candidate.keywords)
+              candidate.text) :lower))
+  candidate)
+
+(fn dynamic-candidates []
+  "The candidates computed from the input by the session's :dynamic function."
+  (if session.dynamic
+      (let [(ok result) (pcall session.dynamic session.input)]
+        (if (and ok result)
+            (do
+              (each [_ key (ipairs [:before :after :only])]
+                (each [_ c (ipairs (or (. result key) []))]
+                  (normalize c)))
+              result)
+            (do
+              (when (not ok) (print (.. "minibuffer dynamic: " (tostring result))))
+              {})))
+      {}))
+
 (fn refilter []
   (let [terms (terms-of session.input)
-        scored (icollect [i c (ipairs (or session.collection []))]
-                 (let [s (score c terms)]
-                   (when s {: c : s : i})))]
+        dynamic (dynamic-candidates)
+        scored (if dynamic.only []
+                   (icollect [i c (ipairs (or session.collection []))]
+                     (let [s (score c terms)]
+                       (when s {: c : s : i}))))
+        matches (or dynamic.only (icollect [_ c (ipairs (or dynamic.before []))] c))]
     (table.sort scored #(if (= $1.s $2.s) (< $1.i $2.i) (< $1.s $2.s)))
+    (each [_ x (ipairs scored)] (table.insert matches x.c))
+    (when (not dynamic.only)
+      (each [_ c (ipairs (or dynamic.after []))] (table.insert matches c)))
     (set session.terms terms)
-    (set session.matches (icollect [_ x (ipairs scored)] x.c))
+    (set session.matches matches)
     (set session.selected 1)
     (set session.offset 0)))
 
@@ -338,6 +366,12 @@ in any order, anywhere in a candidate.
   (icollect [_ m (ipairs [:ctrl :alt :shift :cmd])]
     (when (. flags m) m)))
 
+(fn run-action [action]
+  "Close the session and call ACTION with the selected candidate and the input."
+  (let [s (close)]
+    (when s
+      (action (. s.matches s.selected) s.input))))
+
 (fn on-key [event]
   (let [key (. hs.keycodes.map (: event :getKeyCode))
         flags (: event :getFlags)
@@ -345,8 +379,10 @@ in any order, anywhere in a candidate.
         autorepeat? (= 1 (: event :getProperty
                             hs.eventtap.event.properties.keyboardEventAutorepeat))
         desc (and key (emacs-key (mods-of flags) key))
-        command (. commands desc)]
-    (if (and flags.cmd (= key :v))
+        command (. commands desc)
+        action (and desc session.actions (. session.actions desc))]
+    (if action (do (run-action action) true)
+        (and flags.cmd (= key :v))
         (do (insert (or (hs.pasteboard.getContents) "")) (render) true)
         (or (= key :return) (= key :padenter)) (do (accept flags) true)
         ;; Other Cmd shortcuts belong to the system, e.g. Cmd-Tab.
@@ -367,12 +403,19 @@ in any order, anywhere in a candidate.
 (fn completing-read [prompt collection opts]
   "Read a line in the minibuffer, narrowing COLLECTION as you type.
 
-  COLLECTION is a list of {:text :annotation} tables (other keys are kept), or
+  COLLECTION is a list of {:text :annotation :keywords} tables, where the
+  optional :keywords also match but are not shown (other keys are kept), or
   nil while it is still being gathered; see `set-collection`. OPTS:
     :on-accept (fn [candidate input flags])  RET, with the selected candidate
                                               (nil without matches)
     :on-cancel (fn [])                        C-g / ESC
-    :on-change (fn [matches selected input])  after every redisplay"
+    :on-change (fn [matches selected input])  after every redisplay
+    :dynamic (fn [input])                     candidates computed from the input:
+                                              {:before [..] :after [..]} around the
+                                              matches of COLLECTION, or {:only [..]}
+                                              instead of them; not filtered
+    :actions {key (fn [candidate input])}     extra keys such as s-l that end the read
+                                              and act on the selection"
   (close)
   (hide)
   (set session {: prompt
@@ -385,13 +428,11 @@ in any order, anywhere in a candidate.
                 :on-accept (or opts.on-accept #nil)
                 :on-cancel opts.on-cancel
                 :on-change opts.on-change
+                :dynamic opts.dynamic
+                :actions opts.actions
                 :tap (hs.eventtap.new [hs.eventtap.event.types.keyDown] on-key)})
   (when collection
-    (set session.collection [])
-    (each [_ c (ipairs collection)]
-      (set c.text (c.text:gsub "%s+" " "))
-      (set c.haystack (c.text:lower))
-      (table.insert session.collection c)))
+    (set session.collection (icollect [_ c (ipairs collection)] (normalize c))))
   (refilter)
   (render)
   (: session.tap :start))
@@ -399,11 +440,20 @@ in any order, anywhere in a candidate.
 (fn set-collection [collection]
   "Supply the collection of the active `completing-read`."
   (when session
-    (each [_ c (ipairs collection)]
-      (set c.text (c.text:gsub "%s+" " "))
-      (set c.haystack (c.text:lower)))
+    (each [_ c (ipairs collection)] (normalize c))
     (set session.collection collection)
     (refilter)
+    (render)))
+
+(fn refresh []
+  "Recompute the candidates of the active `completing-read`, e.g. when results
+  of its :dynamic function arrive asynchronously. The selection stays on the
+  same candidate when it is still there."
+  (when session
+    (let [selected (. session.matches session.selected)]
+      (refilter)
+      (each [i c (ipairs session.matches)]
+        (when (= c selected) (select i))))
     (render)))
 
 (fn message [text seconds]
@@ -419,9 +469,20 @@ in any order, anywhere in a candidate.
           (when echo-timer (: echo-timer :stop))
           (set echo-timer (hs.timer.doAfter (or seconds echo-seconds) hide))))))
 
+(fn y-or-n-p [prompt on-yes on-no]
+  "Ask PROMPT in the minibuffer and call ON-YES after y, or ON-NO (if any)
+  after n, C-g or ESC."
+  (let [no #(if on-no (on-no) (message "Quit"))]
+    (completing-read (.. prompt " (y or n) ") []
+                     {:actions {:y #(on-yes) :n no}
+                      :on-accept no
+                      :on-cancel no})))
+
 {: message
  : completing-read
  : set-collection
+ : refresh
+ : y-or-n-p
  :active? (fn [] (not= session nil))
  :abort cancel
  :current (fn [] {: canvas : session})}

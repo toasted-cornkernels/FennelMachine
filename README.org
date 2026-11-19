@@ -100,6 +100,58 @@ To bind one directly in =config.fnl=:
 
 App Shortcuts are ordinary menu items, which the search (=Ctrl-Alt-SPC=) finds.
 
+** Launcher (=Cmd-SPC SPC=)
+
+=Cmd-SPC SPC= opens the launcher (=launcher.fnl=) in the minibuffer. Its candidates
+are the apps (=/Applications=, =/System/Applications=, =~/Applications= and their
+subfolders such as Nix Apps), the panes of System Settings, system commands (lock,
+sleep, restart, shut down, log out, empty or open the Trash, eject, dark mode, keep
+awake, media keys, clipboard history), every Keyboard Shortcuts command, and
+=Quit=, =Hide= and =Force Quit= for each running app. The ones you pick most often
+move to the top. Depending on what you type, it also offers:
+
+| Input                           | Candidate                                          |
+|---------------------------------+----------------------------------------------------|
+| =2^10/3=, =1.5*(4+2)=           | the result, =RET= copies it                        |
+| ~=sqrt(2)*pi~                   | the same with Lua's =math= functions and =e=, =ln= |
+| =g nix flakes=                  | a web search by keyword (=web-searches=)           |
+| =example.com/path=, =https://…= | open the URL                                       |
+| ='name=, =open name=            | Spotlight file search by name                      |
+| =find name=                     | the same, revealing the file in Finder             |
+| =in text=                       | Spotlight search of file contents                  |
+| => command=                     | run it in a new Ghostty (or Terminal) window       |
+| anything else                   | fallback searches on Google, DuckDuckGo, Wikipedia |
+
+Keywords: =g= Google, =ddg= DuckDuckGo, =wiki= Wikipedia, =yt= YouTube, =gh=
+GitHub, =maps= Maps, =nix= Nix packages, =amazon=, =imdb=, =translate= and =define=
+(Dictionary). Add your own to =web-searches= in =launcher.fnl=.
+
+| Key             | Action                                                   |
+|-----------------+----------------------------------------------------------|
+| =RET=           | open / run                                               |
+| =s-RET=         | reveal the app or file in Finder                         |
+| =M-RET=, =M-w=  | copy the result, path, URL or command                    |
+| =s-l=           | Large Type: the selection (or the input) full screen     |
+| =s-y=           | Quick Look the file                                      |
+
+Restart, shut down, log out, empty the Trash and clearing the clipboard history ask
+=y or n= first. To open the launcher with =Opt-SPC= instead, quit the app that holds
+that hotkey and add to =agnostic-keys= in =config.fnl=:
+
+#+begin_src fennel
+{:mods [:alt] :key :space :action "launcher:show"}
+#+end_src
+
+** Clipboard history (=Cmd-SPC y=)
+
+=clipboard.fnl= remembers the last 200 texts you copy (each up to 20,000
+characters) and =Cmd-SPC y= picks one in the minibuffer, annotated with the app it
+was copied in and when. =RET= pastes it into the frontmost app, =s-RET= only copies
+it, =s-l= shows it in Large Type and =s-DEL= forgets it. Copies marked concealed or
+transient, as password managers mark theirs, are not recorded. The history is kept
+in Hammerspoon's settings (=hs.settings=, key =clipboard.history=); =Clear Clipboard
+History…= in the launcher empties it. Only text is recorded.
+
 ** Application modes (=Cmd-SPC m=)
 
 Like Emacs major modes, the frontmost application selects a local keymap. =Cmd-SPC m=

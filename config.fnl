@@ -167,7 +167,8 @@
 (local menu-items
        [{:key "'" :title :Hammerspoon :action hs.toggleConsole}
         {:key :r :title :Relaunch :action hs.relaunch}
-        {:key :space :title :Alfred :action (activate "Alfred 5")}
+        {:key :space :title :Run :action "launcher:show"}
+        {:key :y :title "Clipboard History" :action "clipboard:show"}
         {:key :w
          :title :Window
          :enter "windows:enter-window-menu"
