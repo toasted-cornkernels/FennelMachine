@@ -24,8 +24,7 @@ switching menus in one place which is then powered by config.fnl.
         : map
         : merge}
        (require :lib.functional))
-(local {:align-columns align-columns}
-       (require :lib.text))
+(local which-key (require :lib.which-key))
 (local {:action->fn action->fn
         :bind-keys bind-keys}
        (require :lib.bind))
@@ -99,18 +98,37 @@ switching menus in one place which is then powered by config.fnl.
   (fsm.send :previous))
 
 
+(fn back-or-quit
+  []
+  "C-g, as in Emacs: go up one menu level, or close the modal at the top level."
+  (let [history (. (atom.deref fsm.state) :context :history)]
+    (if (and history (> (length history) 1))
+        (previous-modal)
+        (deactivate-modal))))
+
+
+(var stop-repeat-timeout nil)
+
+(fn stop-modal-timeout
+  []
+  (call-when stop-repeat-timeout)
+  (set stop-repeat-timeout nil))
+
 (fn start-modal-timeout
   []
   "
   API for starting a menu timeout. Some menu actions like the window navigation
   actions can be repeated without having to re-enter into the Menu
   Modal > Window but we don't want to be listening for key events indefinitely.
-  This begins a timeout that will close the modal and remove the key bindings
-  after a time delay specified in the timout function.
+  This (re)starts a timeout that will close the modal and remove the key
+  bindings after a time delay specified in the timout function.
+  It deliberately does not go through the state machine: a transition would
+  rebind the menu keys and cut off a held key's auto-repeat.
   Takes no arguments.
   Side effectful
   "
-  (fsm.send :start-timeout))
+  (stop-modal-timeout)
+  (set stop-repeat-timeout (timeout deactivate-modal)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -169,7 +187,7 @@ switching menus in one place which is then powered by config.fnl.
       previous-modal
       item.action
       (create-action-trigger item)
-      item.items
+      (or item.items item.menu-fn)
       (create-menu-trigger item)
       (fn []
         (log.w "No trigger could be found for item: "
@@ -185,6 +203,8 @@ switching menus in one place which is then powered by config.fnl.
   "
   {:mods (or item.mods [])
    :key item.key
+   ;; Holding a repeatable key fires it again with the system key-repeat rate.
+   :repeat (or item.repeat item.repeatable)
    :action (select-trigger item)})
 
 
@@ -198,13 +218,17 @@ switching menus in one place which is then powered by config.fnl.
   (-> items
       (->> (filter (fn [item]
                      (or item.action
-                         item.items)))
+                         item.items
+                         item.menu-fn)))
            (map bind-item))
       (concat [{:key :ESCAPE
                 :action deactivate-modal}
                {:mods [:ctrl]
                 :key "["
-                :action deactivate-modal}])
+                :action deactivate-modal}
+                {:mods [:ctrl]
+                :key :g
+                :action back-or-quit}])
       (bind-keys)))
 
 
@@ -212,48 +236,15 @@ switching menus in one place which is then powered by config.fnl.
 ;; Display Modals
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(local mod-chars {:cmd "CMD"
-                  :alt "OPT"
-                  :shift "SHFT"
-                  :tab "TAB"})
-
-(fn format-key
-  [item]
-  "
-  Format the key binding of a menu item to display in a modal menu to user
-  Takes a modal menu item
-  Returns a string describing the key
-  "
-  (let [mods (-?>> item.mods
-                  (map (fn [m] (or (. mod-chars m) m)))
-                  (join " ")
-                  (identity))]
-    (.. (or mods "")
-        (if mods " + " "")
-        item.key)))
-
-
 (fn modal-alert
-  [menu]
+  [menu history]
   "
-  Display a menu modal in an hs.alert.
-  Takes a menu table specified in config.fnl
-  Opens an alert modal as a side effect
+  Display a menu modal as an Emacs which-key style panel at the bottom of the
+  screen.
+  Takes a menu table specified in config.fnl and the modal menu history
   Returns nil
   "
-  (let [items (->> menu.items
-                   (filter (fn [item] item.title))
-                   (map (fn [item]
-                          [(format-key item) (. item :title)]))
-                   (align-columns))
-        text (join "\n" items)]
-    (hs.alert.closeAll)
-    (alert text
-           {:textFont "Menlo"
-            :textSize 16
-            :radius 0
-            :strokeWidth 0}
-           99999)))
+  (which-key.show menu history))
 
 (fn show-modal-menu
   [state]
@@ -264,13 +255,12 @@ switching menus in one place which is then powered by config.fnl.
   Returns the function to cleanup everything it sets up
   "
   (lifecycle.enter-menu state.context.menu)
-  (modal-alert state.context.menu)
-  (let [unbind-keys (bind-menu-keys state.context.menu.items)
-        stop-timeout state.context.stop-timeout]
+  (modal-alert state.context.menu state.context.history)
+  (let [unbind-keys (bind-menu-keys state.context.menu.items)]
     (fn []
-      (hs.alert.closeAll 0)
+      (which-key.hide)
       (unbind-keys)
-      (call-when stop-timeout)
+      (stop-modal-timeout)
       (lifecycle.exit-menu state.context.menu)
       )))
 
@@ -287,7 +277,8 @@ switching menus in one place which is then powered by config.fnl.
   "
   (fn [item]
     (and (= (. item :key) target)
-         (has-some? item.items))))
+         (or (has-some? item.items)
+             item.menu-fn))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -301,19 +292,41 @@ switching menus in one place which is then powered by config.fnl.
   Enter a menu like entering into the Window menu from the default main menu.
   Enters the main menu when called from the idle state.
   Takes the current menu state table and the submenu key as 'extra'.
+  A submenu item may provide :menu-fn instead of :items to build its menu when
+  entered; if it returns nil the modal closes.
   Returns updated menu state
   "
   (let [{:config config
+         :history history
          :menu prev-menu} state.context
         app-menu (apps.get-app)
-        menu (if menu-key
-                 (find (by-key menu-key) prev-menu.items)
+        item (when menu-key
+               (find (by-key menu-key) prev-menu.items))
+        menu (if (not menu-key)
                  (if (and app-menu (has-some? app-menu.items))
                      app-menu
-                     config))]
-    {:state {:current-state :active
-             :context (merge state.context {:menu menu})}
-     :effect :open-menu}))
+                     config)
+                 (and item item.menu-fn)
+                 (let [built (item.menu-fn)]
+                   ;; Built menus don't know the key that opened them; record
+                   ;; it so the which-key echo line can show e.g. `SPC m-`.
+                   (when built
+                     (set built.leader-key item.key)
+                     (set built.leader-mods item.mods))
+                   built)
+                 item)]
+    (if menu
+        {:state {:current-state :active
+                 :context (merge state.context
+                                 {:menu menu
+                                  :history (if menu-key
+                                               (conj (or history []) menu)
+                                               [menu])})}
+         :effect :open-menu}
+        {:state {:current-state :idle
+                 :context (merge state.context {:menu :nil
+                                                :history []})}
+         :effect :close-modal-menu})))
 
 
 (fn active->idle
@@ -336,7 +349,8 @@ switching menus in one place which is then powered by config.fnl.
   Transition our modal state machine the main menu to an app menu
   Takes the current modal state table and the app menu table.
   Displays updated modal menu if the current menu is different than the previous
-  menu otherwise results in no operation
+  menu otherwise results in no operation. Application mode menus (lib.modes)
+  belong to the app they were opened in, so switching apps cancels them.
   Returns new modal state
   "
   (let [{:config config
@@ -345,7 +359,9 @@ switching menus in one place which is then powered by config.fnl.
         menu (if (and app-menu (has-some? app-menu.items))
                  app-menu
                  config)]
-    (if (= menu.key prev-menu.key)
+    (if prev-menu.mode
+        (active->idle state)
+        (= menu.key prev-menu.key)
         ; nil transition object means keep all state
         nil
         {:state {:current-state :active
@@ -367,23 +383,6 @@ switching menus in one place which is then powered by config.fnl.
         nil
         (->menu state))))
 
-
-(fn add-timeout-transition
-  [state action extra]
-  "
-  Transition from active to idle, but this transition only fires when the
-  timeout occurs. The timeout is only started after firing a repeatable action.
-  For instance if you enter window > jump east you may want to jump again
-  without having to bring up the modal and enter the window submenu. We wait for
-  more modal keypresses until the timeout triggers which will deactivate the
-  modal.
-  Takes the current modal state table.
-  Returns a the old state with a :stop-timeout added
-  "
-  {:state {:current-state state.current-state
-           :context
-           (merge state.context {:stop-timeout (timeout deactivate-modal)})}
-   :effect :open-menu})
 
 (fn ->previous
   [state action extra]
@@ -418,7 +417,6 @@ switching menus in one place which is then powered by config.fnl.
        {:idle   {:activate       ->menu}
         :active {:deactivate     active->idle
                  :enter          ->menu
-                 :start-timeout  add-timeout-transition
                  :previous       ->previous
                  :enter-app      ->enter-app}})
 
@@ -494,4 +492,5 @@ switching menus in one place which is then powered by config.fnl.
 
 
 {: init
- : activate-modal}
+ : activate-modal
+ : deactivate-modal}

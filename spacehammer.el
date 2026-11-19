@@ -3,19 +3,19 @@
   (when (and message (eq system-type 'darwin))
     (call-process
      (executable-find "hs")
-     nil 0 nil "-c" (concat "hs.alert.show(\"" message "\", 1)"))))
+     nil 0 nil "-c" (format "hs.alert.show(%S, 2)" message))))
 
 (defun spacehammer/fix-frame ()
   "Fix Emacs frame. It may be necessary when screen size changes.
 
 Sometimes zoom-frm functions would leave visible margins around the frame."
   (let* ((geom (frame-monitor-attribute 'geometry))
-         (height (- (first (last geom)) 2))
+         (height (- (nth 3 geom) 2))
          (width (nth 2 geom))
          (fs-p (frame-parameter nil 'fullscreen))
          (frame (selected-frame))
-         (x (first geom))
-         (y (second geom)))
+         (x (nth 0 geom))
+         (y (nth 1 geom)))
     (when (member fs-p '(fullboth maximized))
       (set-frame-position frame x y)
       (set-frame-height frame height nil t)
@@ -153,7 +153,17 @@ KEYS is a string associated with a template (will be passed to `org-capture')"
   (set-frame-position nil 400 400)
   (set-frame-size nil 1000 400 t)
   (switch-to-buffer (get-buffer-create "*scratch*"))
-  (org-capture nil keys))
+  ;; On abort or error, close the frame before returning to the caller app;
+  ;; otherwise deleting the frame afterwards re-activates Emacs.
+  (condition-case err
+      (org-capture nil keys)
+    ((error quit)
+     (delete-frame)
+     (spacehammer/switch-to-app pid)
+     (let ((message (error-message-string err)))
+       (unless (member message '("Abort" "Quit" ""))
+         (spacehammer/alert (concat "org-capture: " message))))
+     (signal (car err) (cdr err)))))
 
 (defadvice org-switch-to-buffer-other-window
     (after supress-window-splitting activate)
@@ -177,7 +187,7 @@ KEYS is a string associated with a template (will be passed to `org-capture')"
 (defadvice user-error
     (before before-user-error activate)
   "Advice"
-  (when (eq (buffer-name) "*Org Select*")
+  (when (equal (buffer-name) "*Org Select*")
     (spacehammer/switch-to-app systemwide-capture-previous-app-pid)))
 
 (provide 'spacehammer)

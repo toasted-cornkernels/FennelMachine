@@ -5,6 +5,7 @@
 (local composer-description "Ask ChatGPT")
 (local max-visited 5000)
 (local max-attempts 5)
+(local wake-attempts 60)
 (local retry-interval 0.05)
 
 ;; Utils ============================================
@@ -58,21 +59,47 @@
   Setting AXFocused makes Chromium call focus() on the composer's DOM node, so
   the editor keeps its draft and restores its previous caret position. Focus
   is applied asynchronously by the renderer, hence the verify-and-retry loop,
-  which also covers the composer briefly missing while a view is loading."
+  which also covers the composer briefly missing while a view is loading.
+
+  Chromium only builds its web accessibility tree once an assistive client asks
+  for it. If the composer is missing, AXEnhancedUserInterface is set to build
+  it (AXManualAccessibility has no effect here); this takes 1-2 seconds, so the
+  attribute is left on to keep later invocations instant. hs.window already
+  turns it off temporarily while moving or resizing windows."
   (let [app (hs.application.frontmostApplication)]
+    (var limit max-attempts)
+    (fn wake-tree []
+      (set limit wake-attempts)
+      (pcall #(: (hs.axuielement.applicationElement app)
+                 :setAttributeValue :AXEnhancedUserInterface true)))
     (fn attempt [n]
       (when (: app :isFrontmost)
         (let [window (: app :focusedWindow)
               composer (and window (find-composer window))]
           (if (and composer (focused? app composer)) nil
-              (> n max-attempts) (do
-                                   (log.w "Could not focus the composer")
-                                   (alert "ChatGPT composer not found"))
+              (> n limit) (do
+                            (log.w "Could not focus the composer")
+                            (alert "ChatGPT composer not found"))
               (do
-                (when composer
-                  (pcall #(: composer :setAttributeValue :AXFocused true)))
+                (if composer
+                    (pcall #(: composer :setAttributeValue :AXFocused true))
+                    (= limit max-attempts)
+                    (wake-tree))
                 (hs.timer.doAfter retry-interval #(attempt (+ n 1))))))))
     (when (and app (= (: app :name) :ChatGPT))
       (attempt 1))))
 
-{: focus-composer}
+(local {: menu-item} (require :lib.modes))
+
+(local commands
+       {:chatgpt.focus-input {:title "Focus message input"
+                              :fn #(focus-composer)}
+        :chatgpt.new-chat {:title "New chat"
+                           :fn (menu-item ["File" "New Chat"])}
+        :chatgpt.new-temporary-chat {:title "New temporary chat"
+                                     :fn (menu-item ["File" "New Temporary Chat"])}
+        :chatgpt.toggle-sidebar {:title "Toggle sidebar"
+                                 :fn (menu-item ["View" "Toggle Sidebar"])}})
+
+{: focus-composer
+ : commands}

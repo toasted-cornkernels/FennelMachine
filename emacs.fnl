@@ -1,39 +1,69 @@
+(local log (hs.logger.new "emacs.fnl" "warning"))
+
+(fn find-emacsclient
+  []
+  "Homebrew's prefix is /opt/homebrew on Apple Silicon and /usr/local on Intel;
+  Nix profiles live elsewhere. Fall back to the login shell's PATH."
+  (or (hs.fnutils.find ["/opt/homebrew/bin/emacsclient"
+                        "/usr/local/bin/emacsclient"
+                        (.. "/etc/profiles/per-user/" (os.getenv "USER")
+                            "/bin/emacsclient")
+                        "/run/current-system/sw/bin/emacsclient"]
+                       #(hs.fs.attributes $1))
+      (let [(out ok) (hs.execute "command -v emacsclient" true)
+            path (and ok (out:match "^%s*(.-)%s*$"))]
+        (when (and path (not= path "")) path))))
+
+(local emacsclient-path (find-emacsclient))
+
+(fn elisp
+  [form]
+  "Wrap FORM so spacehammer.el (shipped with this config) is loaded first."
+  (.. "(progn (unless (featurep 'spacehammer) (load "
+      (string.format "%q" (.. hs.configdir "/spacehammer.el"))
+      " nil t)) " form ")"))
+
+(fn emacsclient
+  [args]
+  "Run emacsclient with ARGS (no shell involved); log failures to the console."
+  (if (not emacsclient-path)
+      (log.w "emacsclient not found; install Emacs or add it to PATH")
+      (: (hs.task.new emacsclient-path
+                      (fn [code stdout stderr]
+                        (when (not= code 0)
+                          (log.w (.. "emacsclient failed (" code "): " stderr
+                                     stdout)))
+                        true)
+                      args)
+         :start)))
+
 (fn capture [is-note]
   "Activates org-capture"
-  (let [key         (if is-note "\"z\"" "")
-        current-app (hs.window.focusedWindow)
-        pid         (.. "\"" (: current-app :pid) "\" ")
-        title       (.. "\"" (: current-app :title) "\" ")
-        run-str     (..
-                     "/usr/local/bin/emacsclient"
-                     " -c -F '(quote (name . \"capture\"))'"
-                     " -e '(spacehammer/activate-capture-frame "
-                     pid title key " )' &")
-        timer       (hs.timer.delayed.new .1 (fn [] (io.popen run-str)))]
-    (: timer :start)))
+  (let [window (hs.window.focusedWindow)
+        pid (if window (tostring (: window :pid)) "")
+        title (if window (: window :title) "")
+        form (string.format "(spacehammer/activate-capture-frame %q %q %s)"
+                            pid title (if is-note "\"z\"" "nil"))]
+    (hs.timer.doAfter 0.1
+                      #(emacsclient ["-c" "-F" "((name . \"capture\"))"
+                                     "-e" (elisp form)]))))
 
 (fn edit-with-emacs []
   "Executes emacsclient, evaluating a special elisp function in spacehammer.el
-   (it must be pre-loaded), passing PID, title and display-id of the caller."
+   (loaded on demand), passing PID, title and display-id of the caller."
   (let [current-app (: (hs.window.focusedWindow) :application)
-        pid         (.. "\"" (: current-app :pid) "\"")
-        title       (.. "\"" (: current-app :title) "\"")
-        screen      (.. "\"" (: (hs.screen.mainScreen) :id) "\"")
-        run-str     (..
-                     "/usr/local/bin/emacsclient"
-                     " -c -F '(quote (name . \"edit\"))' "
-                     " -e '(spacehammer/edit-with-emacs "
-                     pid " " title " " screen " )' &")
-        co          (coroutine.create (fn [run-str]
-                                        (io.popen run-str)))
-        prev        (hs.pasteboard.changeCount)
-        _           (hs.eventtap.keyStroke [:cmd] :c)
-        next        (hs.pasteboard.changeCount)]
+        form (string.format "(spacehammer/edit-with-emacs %q %q %q)"
+                            (tostring (: current-app :pid))
+                            (: current-app :title)
+                            (tostring (: (hs.screen.mainScreen) :id)))
+        prev (hs.pasteboard.changeCount)
+        _ (hs.eventtap.keyStroke [:cmd] :c)
+        next (hs.pasteboard.changeCount)]
     (when (= prev next)         ; Pasteboard was not updated so no text was selected
       (hs.eventtap.keyStroke [:cmd] :a)  ; select all
       (hs.eventtap.keyStroke [:cmd] :c)  ; copy
       )
-    (coroutine.resume co run-str)))
+    (emacsclient ["-c" "-F" "((name . \"edit\"))" "-e" (elisp form)])))
 
 (fn edit-with-emacs-callback [pid title screen]
   "Don't remove! - this is callable from Emacs
@@ -47,25 +77,15 @@
       (: windows :center-window-frame))))
 
 (fn run-emacs-fn
-  [elisp-fn args]
-  "Executes given elisp function in emacsclient. If args table present, passes
-   them into the function."
-  (let [args-lst (when args (.. " '" (table.concat args " '")))
-        run-str  (.. "/usr/local/bin/emacsclient"
-                     " -e \"(funcall '" elisp-fn
-                     (if args-lst args-lst " &")
-                     ")\" &")]
-    (io.popen run-str)))
+  [form]
+  "Evaluates the elisp FORM (a string) in the running Emacs."
+  (emacsclient ["-e" (elisp form)]))
 
 (fn full-screen
   []
   "Switches to current instance of GUI Emacs and makes its frame fullscreen"
   (hs.application.launchOrFocus :Emacs)
-  (run-emacs-fn
-   (..
-    "(lambda ())"
-    "(spacemacs/toggle-fullscreen-frame-on)"
-    "(spacehammer/fix-frame)")))
+  (run-emacs-fn "(progn (set-frame-parameter nil 'fullscreen 'fullboth) (spacehammer/fix-frame))"))
 
 (fn vertical-split-with-emacs
   []
@@ -73,12 +93,9 @@
   (let [windows    (require :windows)
         cur-app    (-?> (hs.window.focusedWindow) (: :application) (: :name))
         rect-left  [0  0 .5  1]
-        rect-right [.5 0 .5  1]
-        elisp      (.. "(lambda ()"
-                       " (spacemacs/toggle-fullscreen-frame-off) "
-                       " (spacemacs/maximize-horizontally) "
-                       " (spacemacs/maximize-vertically))")]
-    (run-emacs-fn elisp)
+        rect-right [.5 0 .5  1]]
+    ;; A fullscreen (fullboth) frame snaps back when resized, so release it first.
+    (run-emacs-fn "(set-frame-parameter nil 'fullscreen nil)")
     (hs.timer.doAfter
      .2
      (fn []

@@ -5,3 +5,190 @@ This is an indispensable config that is based on the awesome [[https://github.co
 ** Caveats
 
 When git-cloning, clone the submodules with ~git clone --recursive~.
+
+** Keyboard hints (=Cmd-Shift-SPC=) and scrolling (=Cmd-Shift-J=)
+
+=hints.fnl= is a Homerow / Vimium style layer built on the Accessibility API.
+=Cmd-Shift-SPC= labels every clickable element on screen: the visible parts of all
+windows (covered elements are skipped), the frontmost app's menu bar and any open
+menu, status menu items and a visible Dock. Type a label to act on it:
+
+| Key                  | Action                                                    |
+|----------------------+-----------------------------------------------------------|
+| label                | click (=AXPress= for buttons, links, menus; else a click) |
+| =Shift= + last char  | right click                                               |
+| =Cmd= + last char    | Cmd-click, e.g. open a link in a new tab                  |
+| =Ctrl= + last char   | double click                                              |
+| =Alt= + last char    | move the pointer there without clicking                   |
+| =/= text =RET=       | search by element text; =RET= clicks the only match or    |
+|                      | relabels the matches                                      |
+| =DEL=                | delete the last typed character                           |
+| =ESC=, =C-g=, hotkey | cancel; any other key cancels and goes through            |
+
+Synthetic clicks are posted with exactly the intended modifiers (keys still held
+from the hotkey are ignored), and the pointer is put back afterwards.
+Clicking an element in a background window focuses that window first.
+
+=Cmd-Shift-J= outlines the focused window's scroll areas, largest first:
+
+| Key                       | Action                                   |
+|---------------------------+------------------------------------------|
+| =h= =j= =k= =l= (held)    | scroll smoothly; hold =Shift= for faster |
+| =d= / =u=                 | half a page down / up                    |
+| =gg= / =G=                | top / bottom                             |
+| =TAB=, =S-TAB=, =1=-=9=   | pick another scroll area                 |
+| =ESC=, =C-g=, =q=, hotkey | leave                                    |
+
+Scroll events are posted at the area's location, so the pointer doesn't move.
+
+Limitations: apps that expose little through Accessibility (games, some
+cross-platform toolkits) get few or no hints. Electron apps are asked to build
+their tree (=AXManualAccessibility=) on first use, so the first invocation there
+may miss web content. Context menus opened by a right click can't be hinted;
+use the arrow keys or type-ahead there.
+
+** Application modes (=Cmd-SPC m=)
+
+Like Emacs major modes, the frontmost application selects a local keymap. =Cmd-SPC m=
+resolves the frontmost app once (by bundle id) and opens its keymap in the regular
+leader menu, so the which-key style popup, =SPC= (back) and =Esc= (cancel) behave as
+everywhere else. Media moved from =Cmd-SPC m= to =Cmd-SPC p=.
+
+** Which-key panel
+
+Leader menus are drawn by =lib/which-key.fnl= as an Emacs which-key style panel along
+the bottom of the screen with the focused window. Entries are sorted (commands first,
+then =+prefix= groups) and laid out column by column, at least six rows high. Keys use
+Emacs notation: =s-h= is Cmd-h, =H= is Shift-h, =SPC= is space. Mode commands show
+their registry id, e.g. =finder.view.list=. The bottom echo line shows the key path
+and keymap, e.g. =SPC m v- finder-mode › view=.
+
+Menu items marked =:repeatable true= (e.g. the =SPC w= move/resize keys) keep the menu
+open and auto-repeat while held, at the system key-repeat rate. The menu closes after
+2 seconds without a repeatable key press.
+
+| Mode            | Keys    | Command                      | Implementation                              |
+|-----------------+---------+------------------------------+---------------------------------------------|
+| =safari-mode=   | see below | =safari.*=                 | Safari menu items (table below)             |
+| =chatgpt-mode=  | =i=     | =chatgpt.focus-input=        | Same as =Ctrl-l= (accessibility focus)      |
+|                 | =n=     | =chatgpt.new-chat=           | File › New Chat                             |
+|                 | =t=     | =chatgpt.new-temporary-chat= | File › New Temporary Chat                   |
+|                 | =s=     | =chatgpt.toggle-sidebar=     | View › Toggle Sidebar                       |
+| =facetime-mode= | =n=     | =facetime.new-call=          | Presses the toolbar's New button            |
+|                 | =m=     | =facetime.mute=              | Video › Mute (only during a call)           |
+|                 | =t=     | =facetime.toggle-on-top=     | Video › Always on Top (toggle)              |
+| =finder-mode=   | see below | =finder.*=                 | Finder menu items (table below)             |
+| =netnewswire-mode= | see below | =netnewswire.*=         | NetNewsWire menu items, AX pane focus       |
+
+Safari's keymap is grouped by menu area. Every command selects a Safari menu item,
+so items without a native shortcut (e.g. View › Customize Toolbar…) work too. Items
+that Safari renames when toggled (Show/Hide Sidebar, Pin/Unpin Tab, …) and checkbox
+items (Always Show Toolbar in Full Screen) toggle on each press.
+
+| Keys | Group      | Bindings                                                                                         |
+|------+------------+--------------------------------------------------------------------------------------------------|
+| =l= =f= =[= =]= | —  | address field, find, back, forward                                                      |
+| =b=  | +tabs      | =n= new, =e= new at end, =d= close (window if last), =o= close others, =y= duplicate,             |
+|      |            | =p= pin, =m= mute, =w= move to new window, =[= / =]= previous/next, =v= overview,                 |
+|      |            | =a t= / =a w= arrange by title/website                                                           |
+| =w=  | +window    | =n= new, =p= private, =d= close, =m= minimize, =z= zoom, =f= fill, =c= center, =g= merge all, =s= full screen |
+| =t=  | +toolbar   | =s= always show in full screen, =c= customize, =t= always show tab bar, =f= favorites bar, =b= status bar |
+| =s=  | +sidebar   | =s= sidebar, =b= bookmarks, =r= reading list, =y= shared with you                                |
+| =v=  | +view      | =r= reader, =d= downloads                                                                        |
+| =z=  | +zoom      | =i= in, =o= out, =0= actual size, =b= / =s= text bigger/smaller                                 |
+| =r=  | +reload    | =r= reload, =o= reload from origin, =b= without/with content blockers, =s= stop                  |
+| =h=  | +history   | =h= show/hide, =m= home, =s= search results, =u= reopen last closed, =a= reopen last session, =c= clear… |
+| =m=  | +bookmarks | =a= add, =l= add to reading list, =e= edit, =s= show/hide, =p= start page                       |
+| =d=  | +develop   | =i= web inspector, =c= JS console, =u= page source, =e= select element, =r= responsive design, =x= empty caches |
+
+=Cmd-SPC m t s= is only enabled in full screen; the Window items =m z f c g= are
+disabled there. The Develop group needs Settings › Advanced › "Show features for
+web developers". Run =modes["describe-mode"]("safari-mode")= for the full list.
+
+Finder follows the same pattern and reuses Safari's letters where they overlap
+(=l=, =f=, =[=, =]=, =t=, =s=, =b=, =w=):
+
+| Keys | Group    | Bindings                                                                                     |
+|------+----------+----------------------------------------------------------------------------------------------|
+| =l= =f= =[= =]= =u= | — | go to folder…, find, back, forward, enclosing folder                              |
+| =o= =i= =y= | —    | open, get info, Quick Look (toggle)                                                           |
+| =g=  | +go      | =h= home, =d= desktop, =o= documents, =l= downloads, =a= applications, =u= utilities, =x= library, |
+|      |          | =r= recents, =i= iCloud Drive, =c= computer, =n= network, =s= shared, =w= AirDrop, =k= server… |
+| =e=  | +edit    | =n= new folder, =s= new folder with selection, =r= rename, =d= duplicate, =a= alias, =c= compress, |
+|      |          | =o= show original, =p= copy as pathname, =k= copy as link, =x= move to trash, =e= empty trash… |
+| =v=  | +view    | =i l c g= icons/list/columns/gallery, =u= use groups, =k= clean up, =o= view options,        |
+|      |          | =s= +sort: =x= none, =n= name, =k= kind, =o= opened, =a= added, =m= modified, =c= created, =s= size, =t= tags |
+| =t=  | +toolbar | =s= toolbar, =c= customize, =t= tab bar, =p= path bar, =b= status bar                         |
+| =s=  | +sidebar | =s= sidebar, =p= preview                                                                      |
+| =b=  | +tabs    | =n= new, =o= open in new tab, =d= close, =[= / =]= previous/next, =w= move to window, =v= all tabs |
+| =w=  | +window  | =n= new, =d= close, =a= close all, =m= minimize, =z= zoom, =f= fill, =c= center, =g= merge, =s= full screen |
+
+Show/Hide items toggle. Sort commands are absent while View › Use Groups is on
+(Finder replaces Sort By with Group By). Tab Overview disables most View items.
+
+NetNewsWire uses the same group letters. The panes have no menu items, so =1=,
+=2= and =3= set AXFocused on the feeds list, timeline and article view, which moves
+real keyboard focus (arrow keys then act on that pane):
+
+| Keys | Group     | Bindings                                                                                   |
+|------+-----------+--------------------------------------------------------------------------------------------|
+| =1= =2= =3= | — | focus feeds, timeline, article                                                            |
+| =f= =r= =n= =u= =o= | — | article search…, refresh, next unread, read/unread, open in browser                 |
+| =a=  | +article  | =u= read/unread, =s= star, =a= all read, =k= / =j= above/below read, =v= reader view,     |
+|      |           | =o= browser, =b= background, =c= copy URL, =x= copy external URL                          |
+| =g=  | +go       | =n= next unread, =t= today, =u= all unread, =s= starred                                   |
+| =v=  | +view     | =r= read articles, =f= read feeds, =c= column layout, =k= clean up,                       |
+|      |           | =s= +sort: =d= date, =f= feed, =t= title, =u= unread, =s= starred, =o= / =n= oldest/newest on top |
+| =t=  | +toolbar  | =s= toolbar, =c= customize                                                                |
+| =s=  | +sidebar  | =s= sidebar                                                                               |
+| =e=  | +feeds    | =n= new feed…, =f= new folder…, =i= import…, =x= export…                                  |
+| =w=  | +window   | =n= new, =d= close, =0= main, =m= minimize, =z= zoom, =f= fill, =c= center, =s= full screen, |
+|      |           | =i= info, =l= activity log, =e= error log                                                 |
+
+Article commands need a selected article. Selecting an article marks it read, as
+in NetNewsWire itself.
+
+Behaviour:
+- An app without a mode shows "No mode for …" and binds nothing.
+- An undefined key cancels the sequence and is swallowed (not typed into the app).
+  Cmd chords such as =Cmd-,= cancel and pass through to the app.
+- Switching applications cancels an open mode keymap.
+- =C-g= goes back one level like =SPC=, and closes the leader at the top level, as
+  in Emacs. =Esc= and =C-[= close it from any level.
+- Like Emacs prefixes, there is no idle timeout.
+- Menu commands rely on the app's reported menu state, which can be stale for
+  about 0.5 s after the app becomes frontmost. A command fired in that window
+  may show "Unavailable now".
+
+*** Adding a mode
+
+1. Write the commands, e.g. =podcasts.fnl= returning ={:commands {...}}=. Each
+   command is ={:title "..." :fn (fn [app] ...)}= and receives the app resolved
+   when the leader was entered. =lib.modes= provides =menu-item= (select a menu
+   path; an element may be a list of alternative titles, e.g.
+   =["View" ["Show Sidebar" "Hide Sidebar"]]=, for items renamed by state), =menu-item-matching= (select a menu item by Lua
+   pattern, for titles that embed the selection such as Copy “a.txt” as Pathname)
+   and =press-button= (AXPress a button in the focused window).
+2. Declare the mode in =config.fnl= and add it to =:modes=:
+
+#+begin_src fennel
+(local podcasts-mode
+       {:id :podcasts-mode
+        :title :Podcasts
+        :bundle-ids [:com.apple.podcasts]
+        :commands (. (require :podcasts) :commands)
+        :keymap [{:key :p :title :play :command :podcasts.play-pause}
+                 {:key :g :title :go          ; prefix: any depth of :items
+                  :items [{:key :l :title :library :command :podcasts.library}]}]})
+#+end_src
+
+The keymap is the single source of truth for dispatch and help. Commands can be
+run without their key sequence, and both can be introspected from the console:
+
+#+begin_src lua
+modes = require("lib.modes")
+modes["execute-command"]("safari.toolbar.customize")
+print(modes["describe-mode"]("safari-mode"))
+print(hs.inspect(modes["describe-key"]("safari-mode", {"t", "s"})))
+print(hs.inspect(modes["list-commands"]()))
+#+end_src

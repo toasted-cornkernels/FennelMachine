@@ -50,80 +50,92 @@
 ;; My Addition!! ====================================
 ;; ==================================================
 
-(fn resize-border-up []
-  (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
-    (set window-frame.y (- window-frame.y 10))
-    (set window-frame.h (+ window-frame.h 10))
-    (window:setFrame window-frame)))
+;; Each adjustment takes the focused window's frame and its screen's
+;; usable frame (excluding menu bar and Dock) and returns the target frame.
 
-(fn resize-border-down []
-  (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
-    (set window-frame.h (+ window-frame.h 10))
-    (window:setFrame window-frame)))
+(fn nudge [dx dy dw dh]
+  (fn [window-frame]
+    (set window-frame.x (+ window-frame.x dx))
+    (set window-frame.y (+ window-frame.y dy))
+    (set window-frame.w (+ window-frame.w dw))
+    (set window-frame.h (+ window-frame.h dh))
+    window-frame))
 
-(fn resize-border-left []
-  (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
-    (set window-frame.x (- window-frame.x 10))
-    (set window-frame.w (+ window-frame.w 10))
-    (window:setFrame window-frame)))
-
-(fn resize-border-right []
-  (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
-    (set window-frame.w (+ window-frame.w 10))
-    (window:setFrame window-frame)))
-
-(fn move-up []
-  (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
-    (set window-frame.y (- window-frame.y 10))
-    (window:setFrame window-frame)))
-
-(fn move-down []
-  (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
-    (set window-frame.y (+ window-frame.y 10))
-    (window:setFrame window-frame)))
-
-(fn move-left []
-  (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
-    (set window-frame.x (- window-frame.x 10))
-    (window:setFrame window-frame)))
-
-(fn move-right []
-  (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)]
-    (set window-frame.x (+ window-frame.x 10))
-    (window:setFrame window-frame)))
-
-(fn center-enlarge-with-rate []
-  (let [window (hs.window.focusedWindow)
-        window-frame (window:frame)
-        screen-frame (: (window:screen) :frame)
-        rate 0.85]
-    (set window-frame.x (* (* screen-frame.w (- 1 rate)) 0.5))
-    (set window-frame.y (* (* screen-frame.h (- 1 rate)) 0.5))
+(fn center-enlarge [rate]
+  (fn [window-frame screen-frame]
+    (set window-frame.x (+ screen-frame.x (* screen-frame.w (- 1 rate) 0.5)))
+    (set window-frame.y (+ screen-frame.y (* screen-frame.h (- 1 rate) 0.5)))
     (set window-frame.w (* screen-frame.w rate))
     (set window-frame.h (* screen-frame.h rate))
-    (window:setFrame window-frame)))
+    window-frame))
+
+(fn unit-rect [[ux uy uw uh]]
+  (fn [window-frame screen-frame]
+    (set window-frame.x (+ screen-frame.x (* screen-frame.w ux)))
+    (set window-frame.y (+ screen-frame.y (* screen-frame.h uy)))
+    (set window-frame.w (* screen-frame.w uw))
+    (set window-frame.h (* screen-frame.h uh))
+    window-frame))
+
+(local window-adjustments
+       {:resize-border-up (nudge 0 -10 0 10)
+        :resize-border-down (nudge 0 0 0 10)
+        :resize-border-left (nudge -10 0 10 0)
+        :resize-border-right (nudge 0 0 10 0)
+        :move-up (nudge 0 -10 0 0)
+        :move-down (nudge 0 10 0 0)
+        :move-left (nudge -10 0 0 0)
+        :move-right (nudge 10 0 0 0)
+        :center-enlarge-with-rate (center-enlarge 0.85)
+        :resize-half-left (unit-rect [0 0 0.5 1])
+        :resize-half-right (unit-rect [0.5 0 0.5 1])
+        :resize-half-top (unit-rect [0 0 1 0.5])
+        :resize-half-bottom (unit-rect [0 0.5 1 0.5])})
+
+(fn target-frame [window window-adjustment]
+  (window-adjustment (window:frame) (: (window:screen) :frame)))
+
+(fn apply-once [window-adjustment]
+  "Apply `window-adjustment` to the focused window a single time."
+  (let [window (hs.window.focusedWindow)]
+    (when window
+      (: history :push)
+      (window:setFrame (target-frame window window-adjustment)))))
 
 ;; Do it repeatedly =================================
 ;; ==================================================
 
-(fn repeat-apply [window-adjustment x y]
-  "Repeatedly do `window-adjustment` until its position stabilizes.")
+(fn same-frame? [a b]
+  (and (<= (math.abs (- a.x b.x)) 1)
+       (<= (math.abs (- a.y b.y)) 1)
+       (<= (math.abs (- a.w b.w)) 1)
+       (<= (math.abs (- a.h b.h)) 1)))
+
+(fn repeat-apply [window-adjustment]
+  "Repeatedly do `window-adjustment` until its position stabilizes.
+  The target is computed once, then re-applied (without animation) while the
+  window is neither at the target nor stuck where the previous attempt left
+  it. Some apps clamp position against their old size, so one setFrame can
+  land short; apps that snap to a grid stop changing and end the loop."
+  (let [window (hs.window.focusedWindow)]
+    (when window
+      (: history :push)
+      (let [target (target-frame window window-adjustment)]
+        (var previous nil)
+        (var tries 0)
+        (while (and (< tries 5)
+                    (not (same-frame? (window:frame) target))
+                    (not (and previous (same-frame? (window:frame) previous))))
+          (set previous (window:frame))
+          (window:setFrame target 0)
+          (set tries (+ tries 1)))))))
+
+(local window-adjusters
+       (collect [name window-adjustment (pairs window-adjustments)
+                 &into (collect [name window-adjustment (pairs window-adjustments)]
+                         (.. name :-repeatedly)
+                         #(repeat-apply window-adjustment))]
+         name #(apply-once window-adjustment)))
 
 ;; Shared Functions =================================
 ;; ==================================================
@@ -269,25 +281,6 @@
   (: history :push)
   (let [win (hs.window.focusedWindow)]
     (when win (: win :move rct))))
-
-(fn resize-window-halve [arrow]
-  "Resize a window by half the grid dimensions specified in config.fnl.
-  Takes an :h :j :k or :l arrow Performs a side effect to resize the
-  active window's frame rect Returns nil"
-  (: history :push)
-  (rect (. arrow-map arrow :half)))
-
-(fn resize-half-left []
-  (resize-window-halve :h))
-
-(fn resize-half-right []
-  (resize-window-halve :l))
-
-(fn resize-half-top []
-  (resize-window-halve :k))
-
-(fn resize-half-bottom []
-  (resize-window-halve :j))
 
 ;; Resize window by increments ======================
 ;; ==================================================
@@ -488,52 +481,40 @@
 ;; Exports ==========================================
 ;; ==================================================
 
-{: activate-app
- : center-window-frame
- : enter-window-menu
- : exit-window-menu
- : hide-display-numbers
- : highlight-active-window
- : init
- : jump
- : jump-to-last-window
- : jump-window-above
- : jump-window-below
- : jump-window-left
- : jump-window-right
- : maximize-window-frame
- : minimize-window-frame
- : move-east
- : move-north
- : move-south
- : move-to-screen
- : move-west
- : position-window-center
- : rect
- : resize-down
- : resize-half-bottom
- : resize-half-left
- : resize-half-right
- : resize-half-top
- : resize-inc-bottom
- : resize-inc-left
- : resize-inc-right
- : resize-inc-top
- : resize-left
- : resize-right
- : resize-up
- : resize-to-grid
- : resize-border-up
- : resize-border-down
- : resize-border-left
- : resize-border-right
- : move-up
- : move-down
- : move-left
- : move-right
- : center-enlarge-with-rate
- : set-mouse-cursor-at
- : show-display-numbers
- : show-grid
- : undo}
-
+(collect [name f (pairs window-adjusters)
+         &into {: activate-app
+                : center-window-frame
+                : enter-window-menu
+                : exit-window-menu
+                : hide-display-numbers
+                : highlight-active-window
+                : init
+                : jump
+                : jump-to-last-window
+                : jump-window-above
+                : jump-window-below
+                : jump-window-left
+                : jump-window-right
+                : maximize-window-frame
+                : minimize-window-frame
+                : move-east
+                : move-north
+                : move-south
+                : move-to-screen
+                : move-west
+                : position-window-center
+                : rect
+                : resize-down
+                : resize-inc-bottom
+                : resize-inc-left
+                : resize-inc-right
+                : resize-inc-top
+                : resize-left
+                : resize-right
+                : resize-up
+                : resize-to-grid
+                : set-mouse-cursor-at
+                : show-display-numbers
+                : show-grid
+                : undo}]
+  name f)

@@ -32,7 +32,7 @@
 (set hs.hints.showTitleThresh 4)
 (set hs.hints.titleMaxSize 10)
 (set hs.hints.fontSize 30)
-(set hs.window.animationDuration 0.2)
+(set hs.window.animationDuration 0)
 
 "
 alert :: str, { style }, seconds -> nil
@@ -140,7 +140,8 @@ Returns nil. This function causes side-effects.
 (local config (require :config))
 
 ;; Initialize our modules that depend on config
-(local modules [:lib.hyper :vim :windows :apps :lib.bind :lib.modal :lib.apps])
+(local modules [:lib.hyper :vim :windows :apps :lib.bind :lib.modal :lib.apps
+                :lib.modes])
 
 (defadvice get-config-impl
   []
