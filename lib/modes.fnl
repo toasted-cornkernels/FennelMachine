@@ -35,7 +35,6 @@ its keymap through lib.modal, which handles display, Back and Escape.
 (local log (hs.logger.new "modes.fnl" "info"))
 
 (local leader-path "Cmd-SPC m")
-(local back-key {:key :space :title :Back :action :previous})
 
 (local modes [])
 (local commands {})
@@ -236,7 +235,7 @@ Cmd chords pass through so shortcuts like Cmd-, keep working.
 
 (fn format-chord
   [{: key : mods}]
-  (join "-" (concat mods [key])))
+  (which-key.emacs-key mods key))
 
 (fn guard-undefined-keys
   [path items]
@@ -301,7 +300,7 @@ Cmd chords pass through so shortcuts like Cmd-, keep working.
                           :command child.command
                           :action #(execute-command child.command app)}))
                    node.items)
-        menu-items (concat [{:key "" :title (join " › " trail)} back-key] items)
+        menu-items (concat [{:key "" :title (join " › " trail)}] items)
         guard (guard-undefined-keys path menu-items)]
     {:key node.key
      :mods node.mods

@@ -21,14 +21,12 @@
 ;; ==================================================
 
 (local music-app "Apple Music")
-(local back-key {:key :space :title :Back :action :previous})
 
 ;; Windows ==========================================
 ;; ==================================================
 
 (local window-bindings
-       [back-key
-        {:key :hjkl :title :Move}
+       [{:key :hjkl :title :Move}
         {:key :h :action "windows:move-left-repeatedly" :repeatable true}
         {:key :j :action "windows:move-down-repeatedly" :repeatable true}
         {:key :k :action "windows:move-up-repeatedly" :repeatable true}
@@ -91,8 +89,7 @@
 
 (local app-bindings
        (desparsify
-        [back-key
-         (app-binding :Emacs :e)
+        [(app-binding :Emacs :e)
          (app-binding :Safari :f)
          (app-binding :Ghostty :i)
          (app-binding :Slack :s)
@@ -105,8 +102,7 @@
          (app-binding-if-exists "Brave Browser" :b)
          (app-binding-if-exists :KakaoTalk :k)]))
 
-(local media-bindings [back-key
-                       {:key :h
+(local media-bindings [{:key :h
                         :title "Prev Track"
                         :action "mpv:prev-track"
                         :repeatable true}
@@ -129,8 +125,7 @@
                        {:key :n :title "Now Playing" :action "mpv:show-now-playing"}
                        {:key :a :title "Open EMMS" :action "mpv:open-emms"}])
 
-(local emacs-bindings [back-key
-                       {:key :c
+(local emacs-bindings [{:key :c
                         :title :Capture
                         :action (fn []
                                   (emacs.capture))}
@@ -146,8 +141,7 @@
                         :action "emacs:full-screen"}])
 
 (local display-bindings
-       [back-key
-        {:key :h
+       [{:key :h
          :title "Brightness Down"
          :action (fn []
                    (hs.brightness.set (- (hs.brightness.get) 1)))
@@ -165,8 +159,7 @@
 
 ;; Emacs' C-h: describe keys, bindings and UI elements (describe.fnl).
 (local help-bindings
-       [back-key
-        {:key :k :title "Describe Key" :action "describe:describe-key"}
+       [{:key :k :title "Describe Key" :action "describe:describe-key"}
         {:key :b :title "Describe Bindings" :action "describe:describe-bindings"}
         {:key :w :title "Where Is" :action "describe:where-is"}
         {:key "." :title "Describe Element" :action "describe:describe-element"}
@@ -189,8 +182,7 @@
 
 ;; Clipboard history (clipboard.fnl).
 (local clipboard-bindings
-       [back-key
-        {:key :y :title "Clipboard History" :action "clipboard:show"}
+       [{:key :y :title "Clipboard History" :action "clipboard:show"}
         {:key :c :title "Clear History" :action "clipboard:confirm-clear"}
         {:key :p :title "Pause Recording" :action "clipboard:pause"}
         {:key :r :title "Resume Recording" :action "clipboard:resume"}

@@ -267,7 +267,7 @@ Cmd chords close the HUD and pass through to the app.
 
 Like Emacs major modes, the frontmost application selects a local keymap. =Cmd-SPC m=
 resolves the frontmost app once (by bundle id) and opens its keymap in the regular
-leader menu, so the which-key style popup, =SPC= (back) and =Esc= (cancel) behave as
+leader menu, so the which-key style popup, =C-g= (back) and =Esc= (cancel) behave as
 everywhere else. Media moved from =Cmd-SPC m= to =Cmd-SPC p=.
 
 =Cmd-Shift-,= is the Spacemacs-style local leader: it opens the mode keymap
@@ -354,7 +354,7 @@ builds the commands from the keymap in =config.fnl=, which is the only list.
 | =T=  | +toggle    | =l= line numbers, =f= fullscreen, =t= theme, =w= writeroom, =m= mode line, =p= padding, =D= debug on error |
 | =q=  | +quit      | =f= delete frame                                                                         |
 
-Help is flattened from =SPC h d= to =h=. =SPC SPC= (=M-x=) is =x= because =SPC= is Back.
+Help is flattened from =SPC h d= to =h=, and =SPC SPC= (=M-x=) is =x=.
 Modifier keys select their own submenus, so =T= (toggle) and =t= (tab) differ.
 
 Finder follows the same pattern and reuses Safari's letters where they overlap
@@ -405,8 +405,9 @@ Behaviour:
 - An undefined key cancels the sequence and is swallowed (not typed into the app).
   Cmd chords such as =Cmd-,= cancel and pass through to the app.
 - Switching applications cancels an open mode keymap.
-- =C-g= goes back one level like =SPC=, and closes the leader at the top level, as
-  in Emacs. =Esc= and =C-[= close it from any level.
+- =C-g= goes back one level, and closes the leader at the top level, as in Emacs.
+  =Esc= and =C-[= close it from any level. =SPC= is not bound in menus; in a mode
+  keymap it is an undefined key like any other.
 - Like Emacs prefixes, there is no idle timeout.
 - Menu commands rely on the app's reported menu state, which can be stale for
   about 0.5 s after the app becomes frontmost. A command fired in that window
