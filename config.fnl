@@ -223,6 +223,9 @@
 (local agnostic-keys [{:mods [:cmd]
                        :key :space
                        :action "lib.modal:activate-modal"}
+                      {:mods [:cmd :shift]
+                       :key ","
+                       :action "lib.modal:activate-local-leader"}
                       {:mods [:cmd :ctrl] :key "`" :action hs.toggleConsole}
                       {:mods [:cmd :shift]
                        :key :space

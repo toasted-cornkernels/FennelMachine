@@ -232,12 +232,15 @@ Help HUD keys:
 
 Cmd chords close the HUD and pass through to the app.
 
-** Application modes (=Cmd-SPC m=)
+** Application modes (=Cmd-SPC m=, =Cmd-Shift-,=)
 
 Like Emacs major modes, the frontmost application selects a local keymap. =Cmd-SPC m=
 resolves the frontmost app once (by bundle id) and opens its keymap in the regular
 leader menu, so the which-key style popup, =SPC= (back) and =Esc= (cancel) behave as
 everywhere else. Media moved from =Cmd-SPC m= to =Cmd-SPC p=.
+
+=Cmd-Shift-,= is the Spacemacs-style local leader: it opens the mode keymap
+directly, exactly as =Cmd-SPC m= does, so =Cmd-Shift-, b n= is =Cmd-SPC m b n=.
 
 ** Which-key panel
 

@@ -89,6 +89,17 @@ switching menus in one place which is then powered by config.fnl.
   (fsm.send :deactivate))
 
 
+(fn activate-local-leader
+  []
+  "
+  The local leader: open the frontmost app's mode keymap directly, exactly as
+  `Cmd-SPC m` does (so `SPC` still goes back to the leader menu).
+  "
+  (deactivate-modal)
+  (activate-modal)
+  (enter-modal :m))
+
+
 (fn previous-modal
   []
   "
@@ -493,4 +504,5 @@ switching menus in one place which is then powered by config.fnl.
 
 {: init
  : activate-modal
+ : activate-local-leader
  : deactivate-modal}
