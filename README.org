@@ -267,6 +267,7 @@ open and auto-repeat while held, at the system key-repeat rate. The menu closes 
 |                 | =t=     | =facetime.toggle-on-top=     | Video › Always on Top (toggle)              |
 | =finder-mode=   | see below | =finder.*=                 | Finder menu items (table below)             |
 | =netnewswire-mode= | see below | =netnewswire.*=         | NetNewsWire menu items, AX pane focus       |
+| =emacs-mode=    | see below | =emacs.*=                  | Emacs commands via =emacsclient=            |
 
 Safari's keymap is grouped by menu area. Every command selects a Safari menu item,
 so items without a native shortcut (e.g. View › Customize Toolbar…) work too. Items
@@ -292,6 +293,38 @@ items (Always Show Toolbar in Full Screen) toggle on each press.
 =Cmd-SPC m t s= is only enabled in full screen; the Window items =m z f c g= are
 disabled there. The Develop group needs Settings › Advanced › "Show features for
 web developers". Run =modes["describe-mode"]("safari-mode")= for the full list.
+
+Emacs' keymap mirrors the =SPC= leader in ELispMachine's =init.el=, so the same keys
+work from any evil state (including insert) and from the minibuffer. A leaf
+=emacs.NAME= runs the Emacs command =NAME= as =M-x= would, in the selected frame and
+window: =spacehammer/run-command= (=spacehammer.el=) schedules it on a timer, so
+=emacsclient= returns at once and the command can prompt. A command that isn't
+loaded yet (=gptel-abort=) loads its library first. =emacs.fnl='s =commands-for=
+builds the commands from the keymap in =config.fnl=, which is the only list.
+
+| Keys | Group      | Bindings                                                                                 |
+|------+------------+------------------------------------------------------------------------------------------|
+| =x= =TAB= =o= | — | =M-x=, last buffer, find file                                                    |
+| =b=  | +buffer    | =b= switch, =B= ibuffer, =d= kill, =n= / =p= next/previous, =r= rename, =R= revert, =-= bury |
+| =f=  | +file      | =f= find, =r= recent, =s= save, =S= save all, =a= save as, =R= rename, =j= dired, =d= directory, |
+|      |            | =p= project buffer, =g r= / =g g= / =g d= ripgrep/git grep/fd, =e d= / =e R= init.el visit/reload |
+| =w=  | +window    | =hjkl= move, =s= / =v= split, =d= / =D= delete (ace), =w= other, ~=~ balance,             |
+|      |            | =u= / =U= winner undo/redo, =t= transpose, =x= kill buffer and window                     |
+| =t=  | +tab       | =n= / =p= next/previous, =N= new, =d= / =D= close (others), =r= rename, =t= list, =TAB= recent, |
+|      |            | =f= find file, =b= buffer, =y= duplicate                                                  |
+| =j=  | +jump      | =j= char (avy), =l= link, =L= lines (all buffers), =u= URL                                |
+| =g=  | +git       | =s= status, =d= diff, =m= dispatch, =c= commit, =p= / =P= push/pull, =f= file dispatch     |
+| =P=  | +project   | =p= switch, =f= find file, =b= buffer, =g= regexp, =d= dired, =c= compile, =k= kill buffers |
+| =h=  | +help      | =h= help, =f= =v= =k= =c= =s= =.= helpful, =m= mode, =b= bindings, =M= keymap, =x= char, =p= package |
+| =y=  | +yank      | =y= pop, =r= replace, =i= from history                                                   |
+| =a o= | +org      | =o= agenda, =a= agenda list, =c= capture, =t= todos, =s= search, =m= tags, =l= store link, |
+|      |            | =C= clock, =j= journal, =r= org-roam, =d= dailies                                         |
+| =L=  | +LLMs      | =l= gptel, =s= send, =m= menu, =q= abort, =r= rewrite, =a= add file, =.= add              |
+| =T=  | +toggle    | =l= line numbers, =f= fullscreen, =t= theme, =w= writeroom, =m= mode line, =p= padding, =D= debug on error |
+| =q=  | +quit      | =f= delete frame                                                                         |
+
+Help is flattened from =SPC h d= to =h=. =SPC SPC= (=M-x=) is =x= because =SPC= is Back.
+Modifier keys select their own submenus, so =T= (toggle) and =t= (tab) differ.
 
 Finder follows the same pattern and reuses Safari's letters where they overlap
 (=l=, =f=, =[=, =]=, =t=, =s=, =b=, =w=):

@@ -30,6 +30,7 @@ its keymap through lib.modal, which handles display, Back and Escape.
         : merge}
        (require :lib.functional))
 (local modal (require :lib.modal))
+(local which-key (require :lib.which-key))
 
 (local log (hs.logger.new "modes.fnl" "info"))
 
@@ -338,7 +339,7 @@ Cmd chords pass through so shortcuts like Cmd-, keep working.
   [nodes keys f]
   "Call (f keys node) for every node of a keymap trie, depth-first."
   (each [_ node (ipairs nodes)]
-    (let [keys (concat keys [node.key])]
+    (let [keys (concat keys [(which-key.emacs-key node.mods node.key)])]
       (f keys node)
       (when node.items
         (walk-keymap node.items keys f)))))

@@ -190,6 +190,41 @@ KEYS is a string associated with a template (will be passed to `org-capture')"
   (when (equal (buffer-name) "*Org Select*")
     (spacehammer/switch-to-app systemwide-capture-previous-app-pid)))
 
+;;;; Running commands for Hammerspoon's emacs-mode
+(defun spacehammer--load-command-library (command)
+  "Load the library named by the longest prefix of COMMAND, e.g. gptel for
+`gptel-abort', when COMMAND is neither defined nor autoloaded."
+  (let ((parts (butlast (split-string (symbol-name command) "-"))))
+    (while (and parts (not (commandp command)))
+      (let ((library (string-join parts "-")))
+        (when (locate-library library)
+          (require (intern library) nil t)))
+      (setq parts (butlast parts)))))
+
+(defun spacehammer--run-command (command)
+  "Run COMMAND interactively, reporting errors in the echo area.
+
+Timers don't make the selected window's buffer current, so do it here, as
+the command loop does; otherwise COMMAND acts on an arbitrary buffer."
+  (set-buffer (window-buffer (selected-window)))
+  (condition-case err
+      (progn
+        (unless (commandp command)
+          (spacehammer--load-command-library command))
+        (if (not (commandp command))
+            (message "%s is not defined" command)
+          (setq this-command command
+                real-this-command command)
+          (command-execute command 'record)))
+    (error (message "%s" (error-message-string err)))))
+
+(defun spacehammer/run-command (command)
+  "Run COMMAND as M-x would, in the selected frame.
+
+A timer runs it from the command loop rather than the server connection, so
+emacsclient returns at once and COMMAND can prompt in the minibuffer."
+  (run-at-time 0 nil #'spacehammer--run-command command))
+
 (provide 'spacehammer)
 
 ;;; spacehammer.el ends here

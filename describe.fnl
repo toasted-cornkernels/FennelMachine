@@ -28,6 +28,7 @@ Short answers go to the echo area, long ones to the help viewer (lib/help.fnl).
 (local modes (require :lib.modes))
 
 (local leader-action "lib.modal:activate-modal")
+(local local-leader-action "lib.modal:activate-local-leader")
 (local read-seconds 10)
 (local home (os.getenv :HOME))
 
@@ -126,9 +127,10 @@ Short answers go to the echo area, long ones to the help viewer (lib/help.fnl).
                            item.key))
         (hotkeys.chord mods item.key))))
 
-(fn leader-chord []
-  (let [item (hs.fnutils.find (or (. (get-config) :keys) [])
-                              #(= $1.action leader-action))]
+(fn leader-chord [?action]
+  (let [action (or ?action leader-action)
+        item (hs.fnutils.find (or (. (get-config) :keys) [])
+                              #(= $1.action action))]
     (when item (chord-of item))))
 
 (fn global-entries []
@@ -400,6 +402,12 @@ Short answers go to the echo area, long ones to the help viewer (lib/help.fnl).
   app's menus, which is the order they get to handle a key in."
   (if (and (hotkeys.lookup chord) (= chord (leader-chord)))
       (describe-leader (leader-root) chord [])
+      (and (hotkeys.lookup chord) (= chord (leader-chord local-leader-action)))
+      (let [menu (modes.local-leader true)]
+        (if menu
+            (describe-leader menu chord ["Mode"])
+            (minibuffer.message (.. chord " opens the local leader; "
+                                    (front-name) " has no mode"))))
       (do
         (minibuffer.message (.. "Looking up " chord "…") read-seconds)
         (with-menu-entries

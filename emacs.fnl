@@ -81,6 +81,36 @@
   "Evaluates the elisp FORM (a string) in the running Emacs."
   (emacsclient ["-e" (elisp form)]))
 
+(fn run-command
+  [command]
+  "
+  Run the interactive Emacs COMMAND (a symbol name) as M-x would, in the
+  selected frame, via spacehammer/run-command. spacehammer.el is reloaded if
+  an older copy without that function is already loaded.
+  "
+  (emacsclient
+   ["-e"
+    (string.format "(progn (unless (fboundp 'spacehammer/run-command) (load %q nil t)) (spacehammer/run-command '%s))"
+                   (.. hs.configdir "/spacehammer.el") command)]))
+
+(fn commands-for
+  [keymap]
+  "
+  Mode commands for every leaf of KEYMAP whose command id is emacs.NAME: each
+  runs the Emacs command NAME. The keymap is the only list of commands.
+  "
+  (let [commands {}]
+    (fn walk [nodes]
+      (each [_ node (ipairs nodes)]
+        (if node.items
+            (walk node.items)
+            (let [name (and node.command (node.command:match "^emacs%.(.+)$"))]
+              (when name
+                (tset commands node.command
+                      {:title name :fn #(run-command name)}))))))
+    (walk keymap)
+    commands))
+
 (fn full-screen
   []
   "Switches to current instance of GUI Emacs and makes its frame fullscreen"
@@ -139,12 +169,14 @@
          (windows.maximize-window-frame))))))
 
 {:capture                          capture
+ :commands-for                     commands-for
  :edit-with-emacs                  edit-with-emacs
  :editWithEmacsCallback            edit-with-emacs-callback
  :emacsclient                      emacsclient
  :full-screen                      full-screen
  :maximize                         maximize
  :note                             (fn [] (capture true))
+ :run-command                      run-command
  :switchToApp                      switch-to-app
  :switchToAppAndPasteFromClipboard switch-to-app-and-paste-from-clipboard
  :vertical-split-with-emacs        vertical-split-with-emacs}

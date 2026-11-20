@@ -176,14 +176,15 @@ switching menus in one place which is then powered by config.fnl.
 
 
 (fn create-menu-trigger
-  [{:key key}]
+  [{:key key :mods mods}]
   "
   Takes a config menu option and returns a function to enter that submenu when
-  action is activated.
+  action is activated. The modifiers are passed along so Shift-t and t can
+  open different submenus.
   Returns a function to activate submenu.
   "
   (fn []
-    (enter-modal key)))
+    (enter-modal (if (has-some? mods) {: key : mods} key))))
 
 
 (fn select-trigger
@@ -279,17 +280,28 @@ switching menus in one place which is then powered by config.fnl.
 ;; Menus, & Config Navigation
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(fn same-mods?
+  [a b]
+  (and (= (length a) (length b))
+       (accumulate [same true _ mod (ipairs a)]
+         (and same (hs.fnutils.contains b mod)))))
+
+
 (fn by-key
   [target]
   "
   Checker function to filter menu items where key matches target
-  Takes a target string to look for like \"window\"
+  Takes a target key string like \"w\", or a {:key :mods} table for a
+  modified key such as Shift-t
   Returns true or false
   "
-  (fn [item]
-    (and (= (. item :key) target)
-         (or (has-some? item.items)
-             item.menu-fn))))
+  (let [key (if (= (type target) :table) target.key target)
+        mods (if (= (type target) :table) target.mods [])]
+    (fn [item]
+      (and (= (. item :key) key)
+           (same-mods? (or item.mods []) mods)
+           (or (has-some? item.items)
+               item.menu-fn)))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

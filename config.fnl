@@ -632,6 +632,183 @@
                           {:key :l :title :activity-log :command :netnewswire.window.activity}
                           {:key :e :title :error-log :command :netnewswire.window.errors}]}]})
 
+;; Mirrors the SPC leader in ELispMachine's init.el, so the same keys work from
+;; any evil state. A leaf :emacs.NAME runs the Emacs command NAME (emacs.fnl).
+(local emacs-keymap
+       [{:key :x :title :M-x :command :emacs.execute-extended-command}
+        {:key :tab :title :last-buffer :command :emacs.evil-switch-to-windows-last-buffer}
+        {:key :o :title :find-file :command :emacs.find-file}
+        {:key :b
+         :title :buffer
+         :items [{:key :b :title :switch :command :emacs.consult-buffer}
+                 {:mods [:shift] :key :b :title :ibuffer :command :emacs.ibuffer}
+                 {:key :d :title :kill :command :emacs.kill-current-buffer}
+                 {:key :n :title :next :command :emacs.next-buffer}
+                 {:key :p :title :previous :command :emacs.previous-buffer}
+                 {:key :r :title :rename :command :emacs.rename-buffer}
+                 {:mods [:shift] :key :r :title :revert :command :emacs.revert-buffer}
+                 {:key "-" :title :bury :command :emacs.bury-buffer}]}
+        {:key :f
+         :title :file
+         :items [{:key :f :title :find :command :emacs.find-file}
+                 {:key :r :title :recent :command :emacs.consult-recent-file}
+                 {:key :s :title :save :command :emacs.save-buffer}
+                 {:mods [:shift] :key :s :title :save-all :command :emacs.evil-write-all}
+                 {:key :a :title :save-as :command :emacs.write-file}
+                 {:mods [:shift] :key :r :title :rename :command :emacs.rename-visited-file}
+                 {:key :j :title :dired :command :emacs.dired-jump}
+                 {:key :d :title :directory :command :emacs.consult-dir}
+                 {:key :p :title :project-buffer :command :emacs.consult-project-buffer}
+                 {:key :g
+                  :title :find/grep
+                  :items [{:key :r :title :ripgrep :command :emacs.consult-ripgrep}
+                          {:key :g :title :git-grep :command :emacs.consult-git-grep}
+                          {:key :d :title :fd :command :emacs.consult-fd}]}
+                 {:key :e
+                  :title :emacs
+                  :items [{:key :d :title :init :command :emacs.visit-init-dot-el}
+                          {:mods [:shift] :key :r :title :reload-init :command :emacs.eval-init-dot-el}]}]}
+        {:key :w
+         :title :window
+         :items [{:key :h :title :left :command :emacs.evil-window-left}
+                 {:key :j :title :down :command :emacs.evil-window-down}
+                 {:key :k :title :up :command :emacs.evil-window-up}
+                 {:key :l :title :right :command :emacs.evil-window-right}
+                 {:key :s :title :split :command :emacs.evil-window-split}
+                 {:key :v :title :vsplit :command :emacs.evil-window-vsplit}
+                 {:key :d :title :delete :command :emacs.delete-window}
+                 {:mods [:shift] :key :d :title :ace-delete :command :emacs.ace-delete-window}
+                 {:key :w :title :other :command :emacs.other-window}
+                 {:key "=" :title :balance :command :emacs.balance-windows}
+                 {:key :u :title :undo :command :emacs.winner-undo}
+                 {:mods [:shift] :key :u :title :redo :command :emacs.winner-redo}
+                 {:key :t :title :transpose :command :emacs.transpose-frame}
+                 {:key :x :title :kill-buffer-and-window :command :emacs.kill-buffer-and-window}]}
+        {:key :t
+         :title :tab
+         :items [{:key :n :title :next :command :emacs.tab-next}
+                 {:key :p :title :previous :command :emacs.tab-previous}
+                 {:mods [:shift] :key :n :title :new :command :emacs.tab-new}
+                 {:key :d :title :close :command :emacs.tab-close}
+                 {:mods [:shift] :key :d :title :close-others :command :emacs.tab-close-other}
+                 {:key :r :title :rename :command :emacs.tab-rename}
+                 {:key :t :title :list :command :emacs.tab-list}
+                 {:key :tab :title :recent :command :emacs.tab-recent}
+                 {:key :f :title :find-file :command :emacs.find-file-other-tab}
+                 {:key :b :title :buffer :command :emacs.switch-to-buffer-other-tab}
+                 {:key :y :title :duplicate :command :emacs.tab-duplicate}]}
+        {:key :j
+         :title :jump
+         :items [{:key :j :title :char :command :emacs.avy-goto-char-timer}
+                 {:key :l :title :link :command :emacs.ace-link}
+                 {:mods [:shift] :key :l :title :lines :command :emacs.consult-line-multi}
+                 {:key :u :title :url :command :emacs.elipsm/avy-goto-url}]}
+        {:key :g
+         :title :git
+         :items [{:key :s :title :status :command :emacs.magit-status}
+                 {:key :d :title :diff :command :emacs.magit-diff-dwim}
+                 {:key :m :title :dispatch :command :emacs.magit-dispatch}
+                 {:key :c :title :commit :command :emacs.magit-commit-create}
+                 {:key :p :title :push :command :emacs.magit-push}
+                 {:mods [:shift] :key :p :title :pull :command :emacs.magit-pull}
+                 {:key :f :title :file-dispatch :command :emacs.magit-file-dispatch}]}
+        {:mods [:shift]
+         :key :p
+         :title :project
+         :items [{:key :p :title :switch :command :emacs.project-switch-project}
+                 {:key :f :title :find-file :command :emacs.project-find-file}
+                 {:key :b :title :buffer :command :emacs.project-switch-to-buffer}
+                 {:key :g :title :regexp :command :emacs.project-find-regexp}
+                 {:key :d :title :dired :command :emacs.project-dired}
+                 {:key :c :title :compile :command :emacs.project-compile}
+                 {:key :k :title :kill-buffers :command :emacs.project-kill-buffers}]}
+        {:key :h
+         :title :help
+         :items [{:key :h :title :help :command :emacs.help}
+                 {:key :f :title :function :command :emacs.helpful-function}
+                 {:key :v :title :variable :command :emacs.helpful-variable}
+                 {:key :k :title :key :command :emacs.helpful-key}
+                 {:key :c :title :command :command :emacs.helpful-command}
+                 {:key :s :title :symbol :command :emacs.helpful-symbol}
+                 {:key "." :title :at-point :command :emacs.helpful-at-point}
+                 {:key :m :title :mode :command :emacs.describe-mode}
+                 {:key :b :title :bindings :command :emacs.describe-bindings}
+                 {:mods [:shift] :key :m :title :keymap :command :emacs.describe-keymap}
+                 {:key :x :title :char :command :emacs.describe-char}
+                 {:key :p :title :package :command :emacs.describe-package}]}
+        {:key :y
+         :title :yank
+         :items [{:key :y :title :pop :command :emacs.consult-yank-pop}
+                 {:key :r :title :replace :command :emacs.consult-yank-replace}
+                 {:key :i :title :from-history :command :emacs.consult-yank-from-kill-ring}]}
+        {:key :a
+         :title :utilities
+         :items [{:key :o
+                  :title :org
+                  :items [{:key :o :title :agenda :command :emacs.org-agenda}
+                          {:key :a :title :agenda-list :command :emacs.org-agenda-list}
+                          {:key :c :title :capture :command :emacs.org-capture}
+                          {:key :t :title :todo-list :command :emacs.org-todo-list}
+                          {:key :s :title :search :command :emacs.org-search-view}
+                          {:key :m :title :tags :command :emacs.org-tags-view}
+                          {:key :l :title :store-link :command :emacs.org-store-link}
+                          {:mods [:shift]
+                           :key :c
+                           :title :clock
+                           :items [{:key :i :title :in :command :emacs.org-clock-in}
+                                   {:key :o :title :out :command :emacs.org-clock-out}
+                                   {:key :g :title :goto :command :emacs.org-clock-goto}
+                                   {:key :c :title :cancel :command :emacs.org-clock-cancel}]}
+                          {:key :j
+                           :title :journal
+                           :items [{:key :j :title :new-entry :command :emacs.org-journal-new-entry}
+                                   {:key :f :title :current :command :emacs.org-journal-open-current-journal-file}]}
+                          {:key :r
+                           :title :org-roam
+                           :items [{:key :f :title :find :command :emacs.org-roam-node-find}
+                                   {:key :c :title :capture :command :emacs.org-roam-capture}
+                                   {:key :i :title :insert :command :emacs.org-roam-node-insert}
+                                   {:key :l :title :buffer :command :emacs.org-roam-buffer-toggle}]}
+                          {:key :d
+                           :title :dailies
+                           :items [{:key :c :title :capture-today :command :emacs.org-roam-dailies-capture-today}
+                                   {:key :d :title :goto-date :command :emacs.org-roam-dailies-goto-date}
+                                   {:key :g
+                                    :title :goto
+                                    :items [{:key "." :title :today :command :emacs.org-roam-dailies-goto-today}
+                                            {:key :y :title :yesterday :command :emacs.org-roam-dailies-goto-yesterday}
+                                            {:key :t :title :tomorrow :command :emacs.org-roam-dailies-goto-tomorrow}]}]}]}]}
+        {:mods [:shift]
+         :key :l
+         :title :LLMs
+         :items [{:key :l :title :chat :command :emacs.gptel}
+                 {:key :s :title :send :command :emacs.gptel-send}
+                 {:key :m :title :menu :command :emacs.gptel-menu}
+                 {:key :q :title :abort :command :emacs.gptel-abort}
+                 {:key :r :title :rewrite :command :emacs.gptel-rewrite}
+                 {:key :a :title :add-file :command :emacs.gptel-add-file}
+                 {:key "." :title :add :command :emacs.gptel-add}]}
+        {:mods [:shift]
+         :key :t
+         :title :toggle
+         :items [{:key :l :title :line-numbers :command :emacs.display-line-numbers-mode}
+                 {:key :f :title :fullscreen :command :emacs.mac-non-native-toggle-frame-fullscreen}
+                 {:key :t :title :theme :command :emacs.consult-theme}
+                 {:key :w :title :writeroom :command :emacs.writeroom-mode}
+                 {:key :m :title :mode-line :command :emacs.hide-mode-line-mode}
+                 {:key :p :title :padding :command :emacs.spacious-padding-mode}
+                 {:mods [:shift] :key :d :title :debug-on-error :command :emacs.toggle-debug-on-error}]}
+        {:key :q
+         :title :quit
+         :items [{:key :f :title :delete-frame :command :emacs.delete-frame}]}])
+
+(local emacs-mode
+       {:id :emacs-mode
+        :title :Emacs
+        :bundle-ids [:org.gnu.Emacs]
+        :commands (emacs.commands-for emacs-keymap)
+        :keymap emacs-keymap})
+
 (local config {:title "Main Menu"
                :items menu-items
                :keys agnostic-keys
@@ -640,7 +817,8 @@
                :exit (fn []
                        (windows.hide-display-numbers))
                : apps
-               :modes [safari-mode chatgpt-mode facetime-mode finder-mode netnewswire-mode]
+               :modes [safari-mode chatgpt-mode facetime-mode finder-mode netnewswire-mode
+                       emacs-mode]
                :hyper {:key :F18}
                :grid {:size :4x2}
                :modules {:windows {:center-ratio "80:50"}}})
