@@ -199,6 +199,11 @@ The items you pick most often move to the top.
    (command "Volume Up" (system-key :SOUND_UP) "sound")
    (command "Volume Down" (system-key :SOUND_DOWN) "sound")
    (command "Clipboard History" #((. (require :clipboard) :show)) "paste")
+   (command (if ((. (require :clipboard) :paused?))
+                "Resume Clipboard History"
+                "Pause Clipboard History")
+            #((. (require :clipboard) :toggle-pause))
+            "clipboard record incognito private")
    (command "Clear Clipboard History…"
             (confirm "Clear the clipboard history?"
                      #((. (require :clipboard) :clear))))])

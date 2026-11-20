@@ -145,12 +145,37 @@ that hotkey and add to =agnostic-keys= in =config.fnl=:
 ** Clipboard history (=Cmd-SPC y=)
 
 =clipboard.fnl= remembers the last 200 texts you copy (each up to 20,000
-characters) and =Cmd-SPC y= picks one in the minibuffer, annotated with the app it
-was copied in and when. =RET= pastes it into the frontmost app, =s-RET= only copies
-it, =s-l= shows it in Large Type and =s-DEL= forgets it. Copies marked concealed or
-transient, as password managers mark theirs, are not recorded. The history is kept
-in Hammerspoon's settings (=hs.settings=, key =clipboard.history=); =Clear Clipboard
-History…= in the launcher empties it. Only text is recorded.
+characters). Only text is recorded.
+
+| Key   | Action                                     |
+|-------+--------------------------------------------|
+| =y y= | pick an entry in the minibuffer            |
+| =y c= | clear the history (asks first)             |
+| =y p= | pause recording                            |
+| =y r= | resume recording                           |
+| =y Y= | toggle recording                           |
+
+Entries are annotated with the app they were copied in and when. In the minibuffer,
+=RET= pastes the entry into the frontmost app, =s-RET= only copies it, =s-l= shows it
+in Large Type and =s-DEL= forgets it. The launcher also offers =Clipboard History=,
+=Clear Clipboard History…= and =Pause= / =Resume Clipboard History=.
+
+Like Emacs' kill ring, the history lives only in memory: it is never written to
+disk (earlier versions kept it in =hs.settings=; that copy is erased on load) and it
+is gone when Hammerspoon reloads or quits. To keep secrets out of it, a copy is not
+recorded when:
+
+- the app marks it concealed or transient (the [[http://nspasteboard.org][nspasteboard.org]] types);
+- a password manager (Passwords, Keychain Access, Proton Pass, 1Password, Bitwarden,
+  KeePassXC, …) is the frontmost app;
+- it looks like a secret: a GitHub, GitLab, OpenAI/Anthropic, Stripe, Slack, AWS,
+  Google or npm token, a JWT, a private key, an assignment such as
+  =DB_PASSWORD='…'=, or a single password-like word (letters, digits and symbols
+  mixed);
+- recording is paused (=Cmd-SPC y p= or =y Y=).
+
+The checks are heuristics. Pause recording before copying a secret that none of them
+would catch.
 
 ** Help (=Cmd-SPC h=)
 

@@ -176,11 +176,23 @@
          :action "describe:describe-element-at-pointer"}
         {:key :m :title "Describe Mode" :action "describe:describe-mode"}])
 
+;; Clipboard history (clipboard.fnl).
+(local clipboard-bindings
+       [back-key
+        {:key :y :title "Clipboard History" :action "clipboard:show"}
+        {:key :c :title "Clear History" :action "clipboard:confirm-clear"}
+        {:key :p :title "Pause Recording" :action "clipboard:pause"}
+        {:key :r :title "Resume Recording" :action "clipboard:resume"}
+        {:mods [:shift]
+         :key :y
+         :title "Toggle Recording"
+         :action "clipboard:toggle-pause"}])
+
 (local menu-items
        [{:key "'" :title :Hammerspoon :action hs.toggleConsole}
         {:key :r :title :Relaunch :action hs.relaunch}
         {:key :space :title :Run :action "launcher:show"}
-        {:key :y :title "Clipboard History" :action "clipboard:show"}
+        {:key :y :title :Clipboard :items clipboard-bindings}
         {:key :w
          :title :Window
          :enter "windows:enter-window-menu"
