@@ -119,7 +119,7 @@ move to the top. Depending on what you type, it also offers:
 | ='name=, =open name=            | Spotlight file search by name                      |
 | =find name=                     | the same, revealing the file in Finder             |
 | =in text=                       | Spotlight search of file contents                  |
-| => command=                     | run it in a new Ghostty (or Terminal) window       |
+| =$ command=                     | run it in a new Ghostty (or Terminal) window       |
 | anything else                   | fallback searches on Google, DuckDuckGo, Wikipedia |
 
 Keywords: =g= Google, =ddg= DuckDuckGo, =wiki= Wikipedia, =yt= YouTube, =gh=

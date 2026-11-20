@@ -9,7 +9,7 @@ Type to narrow, RET to run the selection. What you type can also be:
   example.com     a URL to open
   'foo  open foo  file search with Spotlight (find foo reveals, in foo searches
                   contents)
-  > cmd           a shell command to run in a terminal
+  $ cmd           a shell command to run in a terminal
 
 Every other input ends with fallback web searches.
 
@@ -401,7 +401,7 @@ The items you pick most often move to the top.
                       (when (= keyword :find) [query :find])
                       (when (= keyword :in) [query :in]))]
     (if (= input "") {}
-        (input:match "^>")
+        (input:match "^%$")
         (let [cmd (trim (input:sub 2))]
           {:only [(if (= cmd "")
                       {:text "Type a shell command to run in a terminal" :kind :none}
