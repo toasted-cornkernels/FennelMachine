@@ -8,6 +8,7 @@ package.cpath = package.cpath .. ";" .. os.getenv("HOME") .. "/.luarocks/lib/lua
 package.path = package.path .. ";" .. os.getenv("HOME") .. "/.nix-profile/share/lua/5.3/?.lua;" .. os.getenv("HOME") .. "/.nix-profile/share/lua/5.3/?/init.lua"
 
 fennel = require("fennel")
-table.insert(package.loaders or package.searchers, fennel.searcher)
+-- useMetadata keeps docstrings and arglists around for the describe commands.
+table.insert(package.loaders or package.searchers, fennel.makeSearcher({useMetadata = true}))
 
 require "core"

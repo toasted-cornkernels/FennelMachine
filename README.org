@@ -152,6 +152,49 @@ transient, as password managers mark theirs, are not recorded. The history is ke
 in Hammerspoon's settings (=hs.settings=, key =clipboard.history=); =Clear Clipboard
 History…= in the launcher empties it. Only text is recorded.
 
+** Help (=Cmd-SPC h=)
+
+=describe.fnl= mirrors Emacs' =C-h= commands. Short answers go to the echo area; long
+ones open a less-like help HUD (=lib/help.fnl=).
+
+| Key | Command            | Describes                                                          |
+|-----+--------------------+--------------------------------------------------------------------|
+| =k= | describe-key       | What the next chord (or leader sequence) runs, and what it shadows |
+| =b= | describe-bindings  | Every binding active in the frontmost app                          |
+| =w= | where-is           | Pick a command in the minibuffer and show its keys                 |
+| =.= | describe-element   | The focused accessibility element                                  |
+| =p= | element at pointer | The accessibility element under the mouse pointer                  |
+| =m= | describe-mode      | The frontmost app's mode keymap                                    |
+
+Bindings are collected from several layers. When a chord is bound in more than one,
+the first one wins and describe-key lists the rest as shadowed:
+
+1. Hammerspoon: global keys, app keys, the leader menu (including the app's mode) and
+   any other hotkey. =lib/hotkeys.fnl= records every =hs.hotkey= with its call site,
+   and Fennel docstrings are kept at runtime (=useMetadata=).
+2. macOS: System Settings › Keyboard Shortcuts.
+3. The frontmost app's menus. Reading them takes a second or two in large apps.
+
+describe-key swallows the chord it reads, so nothing runs; =C-g= quits. After
+=Cmd-SPC= it keeps reading keys until it reaches a command, like =C-h k= on a prefix.
+
+Help HUD keys:
+
+| Key                                     | Action                                                  |
+|-----------------------------------------+---------------------------------------------------------|
+| =j= / =k=, =C-n= / =C-p=, arrows, =RET= | Scroll a line                                           |
+| =SPC=, =f=, =C-v= / =b=, =DEL=, =M-v=   | Page down / up                                          |
+| =d= / =u=                               | Half page down / up                                     |
+| =g=, =<=, =M-<= / =G=, =>=, =M->=       | Top / bottom                                            |
+| =/=, =n=, =N=                           | Search, next, previous                                  |
+| =s=                                     | Visit the source in Emacs (=emacsclient=)               |
+| =o=                                     | Open the text in an Emacs buffer (=*Hammerspoon Help*=) |
+| =M-w=                                   | Copy the text                                           |
+| =?=                                     | Key summary                                             |
+| =q=, =Esc=, =C-g=                       | Quit                                                    |
+
+Cmd chords close the HUD and pass through to the app.
+
 ** Application modes (=Cmd-SPC m=)
 
 Like Emacs major modes, the frontmost application selects a local keymap. =Cmd-SPC m=

@@ -479,6 +479,8 @@ in any order, anywhere in a candidate.
                       :on-cancel no})))
 
 {: message
+ :clear (fn [] "Clear the echo area unless the minibuffer is reading."
+          (when (not session) (hide)))
  : completing-read
  : set-collection
  : refresh

@@ -311,17 +311,18 @@ Cmd chords pass through so shortcuts like Cmd-, keep working.
      :exit guard.exit}))
 
 (fn local-leader
-  []
+  [?quiet]
   "
   Menu resolver for `Cmd-SPC m`. Returns the frontmost application's mode
-  keymap as a modal menu, or nil (after notifying) when it has no mode.
+  keymap as a modal menu, or nil (after notifying, unless ?QUIET) when it has
+  no mode.
   "
   (let [app (hs.application.frontmostApplication)
         mode (and app (mode-for-app app))]
     (if mode
         (keymap->menu mode app {:title mode.id :items mode.keymap}
                       leader-path [mode.id])
-        (do
+        (when (not ?quiet)
           (notify (if app
                       (.. "No mode for " (: app :name)
                           " (" (tostring (: app :bundleID)) ")")
@@ -415,4 +416,5 @@ Cmd chords pass through so shortcuts like Cmd-, keep working.
  : press-button
  : describe-mode
  : describe-key
- : list-commands}
+ : list-commands
+ :all-modes (fn [] modes)}

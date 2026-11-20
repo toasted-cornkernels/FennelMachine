@@ -24,6 +24,10 @@
 
 (local log (hs.logger.new "\tcore.fnl\t" :debug))
 
+;; Record each hotkey's chord, callback and origin for the describe commands.
+;; Must run before anything binds a key.
+((. (require :lib.hotkeys) :install))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; defaults
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

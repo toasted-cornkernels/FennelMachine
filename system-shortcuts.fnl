@@ -235,6 +235,17 @@ function set(id, v) {
                 (table.insert acc {: title :element service})))))))
     acc))
 
+(fn shortcuts []
+  "Every command as {:id :name :category :binding :enabled}, :binding being its
+  current key in Emacs notation or nil when it has none."
+  (let [cmds (commands)
+        current (bindings (icollect [_ c (ipairs cmds)] c.id))]
+    (icollect [i c (ipairs cmds)]
+      (let [value (. current i)]
+        {:id c.id :name c.name :category c.category
+         :binding (describe-binding value)
+         :enabled (not (not (and value value.enabled)))}))))
+
 (fn candidates []
   (let [cmds (commands)
         current (bindings (icollect [_ c (ipairs cmds)] c.id))
@@ -271,6 +282,7 @@ function set(id, v) {
                        (minibuffer.set-collection (candidates)))))
 
 {: commands
+ : shortcuts
  : run
  : action
  : execute}

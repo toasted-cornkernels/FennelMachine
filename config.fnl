@@ -164,6 +164,18 @@
 ;; Main Menu & Config ===============================
 ;; ==================================================
 
+;; Emacs' C-h: describe keys, bindings and UI elements (describe.fnl).
+(local help-bindings
+       [back-key
+        {:key :k :title "Describe Key" :action "describe:describe-key"}
+        {:key :b :title "Describe Bindings" :action "describe:describe-bindings"}
+        {:key :w :title "Where Is" :action "describe:where-is"}
+        {:key "." :title "Describe Element" :action "describe:describe-element"}
+        {:key :p
+         :title "Element at Pointer"
+         :action "describe:describe-element-at-pointer"}
+        {:key :m :title "Describe Mode" :action "describe:describe-mode"}])
+
 (local menu-items
        [{:key "'" :title :Hammerspoon :action hs.toggleConsole}
         {:key :r :title :Relaunch :action hs.relaunch}
@@ -181,7 +193,8 @@
         {:key :d :title :Display :items display-bindings}
         {:key :k
          :title "Keyboard Shortcuts"
-         :action "system-shortcuts:execute"}])
+         :action "system-shortcuts:execute"}
+        {:key :h :title :Help :items help-bindings}])
 
 (local agnostic-keys [{:mods [:cmd]
                        :key :space

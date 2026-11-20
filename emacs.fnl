@@ -141,6 +141,7 @@
 {:capture                          capture
  :edit-with-emacs                  edit-with-emacs
  :editWithEmacsCallback            edit-with-emacs-callback
+ :emacsclient                      emacsclient
  :full-screen                      full-screen
  :maximize                         maximize
  :note                             (fn [] (capture true))
