@@ -126,13 +126,19 @@ Keywords: =g= Google, =ddg= DuckDuckGo, =wiki= Wikipedia, =yt= YouTube, =gh=
 GitHub, =maps= Maps, =nix= Nix packages, =amazon=, =imdb=, =translate= and =define=
 (Dictionary). Add your own to =web-searches= in =launcher.fnl=.
 
-| Key             | Action                                                   |
-|-----------------+----------------------------------------------------------|
-| =RET=           | open / run                                               |
-| =s-RET=         | reveal the app or file in Finder                         |
-| =M-RET=, =M-w=  | copy the result, path, URL or command                    |
-| =s-l=           | Large Type: the selection (or the input) full screen     |
-| =s-y=           | Quick Look the file                                      |
+| Key            | Action                                               |
+|----------------+------------------------------------------------------|
+| =RET=          | open / run                                           |
+| =s-RET=        | reveal the app or file in Finder                     |
+| =M-RET=, =M-w= | copy the result, path, URL or command                |
+| =s-l=          | Large Type: the selection (or the input) full screen |
+| =s-y=          | Quick Look the file                                  |
+| =s-e=          | open the file in Emacs (=emacsclient -n=)            |
+| =C-.=          | choose an action for the selection from a list       |
+
+=C-.= lists what applies to the selection: for a file, Open, Open in Emacs, Reveal in
+Finder, Copy Path, Copy Name, Quick Look and Large Type; for anything else, Run, Copy
+and Large Type.
 
 Restart, shut down, log out, empty the Trash and clearing the clipboard history ask
 =y or n= first. To open the launcher with =Opt-SPC= instead, quit the app that holds
@@ -179,18 +185,22 @@ would catch.
 
 ** Media (=Cmd-SPC p=)
 
-=mpv.fnl= controls mpv through its JSON IPC socket, so only mpv instances started
-with =--input-ipc-server= are found (EMMS starts its mpv that way). The echo area
-shows the result.
+=mpv.fnl= controls mpv through its JSON IPC socket: the one given with
+=--input-ipc-server= (as EMMS does), else =$TMPDIR/mpv-<pid>.sock=, which the mpv
+script =mpv-scripts/ipc-socket.lua= opens in every other mpv and removes on quit.
+Home Manager links that script to =~/.config/mpv/scripts/=; without it, only mpv
+started with =--input-ipc-server= is found. The echo area shows the result; seeking shows the new position, or updates the HUD if it is open.
 
-| Key       | Action                                                    |
-|-----------+-----------------------------------------------------------|
-| =s=       | play or pause                                             |
-| =h= / =l= | previous / next track (repeatable), then show Now Playing |
-| =j= / =k= | mpv's volume down / up by 5 (repeatable)                  |
-| =m=       | mute or unmute mpv                                        |
-| =n=       | show or hide the Now Playing HUD                          |
-| =a=       | open EMMS's playlist in an Emacs frame named =EMMS=       |
+| Key           | Action                                                    |
+|---------------+-----------------------------------------------------------|
+| =s=           | play or pause                                             |
+| =h= / =l=     | previous / next track (repeatable), then show Now Playing |
+| =,= / =.=     | seek back / forward 10 seconds (repeatable)               |
+| =S-,= / =S-.= | seek back / forward 1 minute (repeatable)                 |
+| =j= / =k=     | mpv's volume down / up by 5 (repeatable)                  |
+| =m=           | mute or unmute mpv                                        |
+| =n=           | show or hide the Now Playing HUD                          |
+| =a=           | open EMMS's playlist in an Emacs frame named =EMMS=       |
 
 When several mpv instances are running, the keys control the one that is playing,
 else the one controlled last, else the newest. For the mpv that EMMS started, play,
@@ -202,8 +212,8 @@ same, while its =Mute= and =Volume= commands still change the system volume.
 The Now Playing HUD (=now-playing.fnl=) shows the album art, title, artist, album,
 position and a progress bar in the top-right corner. It updates every second, hides
 after 8 seconds, and lets clicks through. The art is the file's embedded cover
-(extracted with ffmpeg), else an image in its folder (=cover=, =folder= or =front=
-first), cached as a PNG in the temporary directory. The files are read by a
+(extracted with ffmpeg), else an image in its folder named =cover=, =folder= or
+=front=, or the folder's only image if it holds an album (two or more tracks), cached as a PNG in the temporary directory. The files are read by a
 background process, so Hammerspoon never waits on them; music on an external drive
 needs Hammerspoon to be allowed to access removable volumes (System Settings ›
 Privacy & Security › Files and Folders).

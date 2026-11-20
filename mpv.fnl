@@ -1,4 +1,5 @@
-;; Media controls for mpv, through its JSON IPC socket (--input-ipc-server).
+;; Media controls for mpv, through its JSON IPC socket (--input-ipc-server, or
+;; the one mpv-scripts/ipc-socket.lua gives every other mpv).
 ;; mpv instances started by EMMS are driven through EMMS for play/pause and
 ;; tracks, so EMMS keeps its playlist and paused state in sync.
 
@@ -11,9 +12,15 @@
 (local pending {})
 (var last-socket nil)
 
-(fn ipc-server [args]
+(local socket-dir (: (or (os.getenv :TMPDIR) "/tmp") :gsub "/$" ""))
+
+(fn ipc-server [pid args]
+  "The socket from --input-ipc-server, else the one mpv-scripts/ipc-socket.lua
+  made for PID, if any."
   (or (args:match "%-%-input%-ipc%-server=(%S+)")
-      (args:match "%-%-input%-ipc%-server%s+(%S+)")))
+      (args:match "%-%-input%-ipc%-server%s+(%S+)")
+      (let [socket (.. socket-dir "/mpv-" pid ".sock")]
+        (when (hs.fs.attributes socket) socket))))
 
 (fn seconds [etime]
   "Convert ps's elapsed time, [[dd-]hh:]mm:ss, to seconds."
@@ -46,7 +53,7 @@
                           found []]
                       (each [_ proc (pairs procs)]
                         (let [exe (proc.args:match "^(%S+)")
-                              socket (ipc-server proc.args)
+                              socket (ipc-server proc.pid proc.args)
                               parent (. procs proc.ppid)]
                           (when (and socket (= (exe:match "[^/]+$") :mpv))
                             (table.insert found
@@ -212,6 +219,49 @@
                      (string.format "mpv volume: %d%%" volume.data)
                      "mpv isn't responding")))))))
 
+(fn clock [seconds]
+  (let [s (math.floor (or seconds 0))]
+    (if (>= s 3600)
+        (string.format "%d:%02d:%02d" (// s 3600) (// (% s 3600) 60) (% s 60))
+        (string.format "%d:%02d" (// s 60) (% s 60)))))
+
+(fn seek [seconds]
+  "Seek mpv SECONDS forward (negative: backward) in the current track."
+  (with-instance
+   (fn [instance]
+     (fn report []
+       (request instance.socket [["get_property" "time-pos"]
+                                 ["get_property" "duration"]]
+                (fn [[pos duration]]
+                  (minibuffer.message
+                   (.. "mpv: " (clock (and pos pos.data))
+                       (if (and duration (= (type duration.data) :number))
+                           (.. " / " (clock duration.data))
+                           ""))))))
+     (request instance.socket [["seek" seconds "relative"]]
+              (fn [[seeked]]
+                (if (not seeked) (minibuffer.message "mpv isn't responding")
+                    (not= seeked.error :success) (minibuffer.message "Nothing to seek in")
+                    (now-playing.visible?) (show-hud instance)
+                    ;; mpv seeks asynchronously; time-pos is stale right after.
+                    (hs.timer.doAfter 0.15 report)))))))
+
+(fn seek-forward []
+  "Seek mpv 10 seconds forward."
+  (seek 10))
+
+(fn seek-backward []
+  "Seek mpv 10 seconds backward."
+  (seek -10))
+
+(fn seek-forward-more []
+  "Seek mpv a minute forward."
+  (seek 60))
+
+(fn seek-backward-more []
+  "Seek mpv a minute backward."
+  (seek -60))
+
 (fn volume-up []
   "Raise mpv's volume."
   (change-volume volume-step))
@@ -256,6 +306,11 @@
   (hs.timer.doAfter 0.2 #(hs.application.launchOrFocus :Emacs)))
 
 {: play-or-pause
+ : seek
+ : seek-forward
+ : seek-backward
+ : seek-forward-more
+ : seek-backward-more
  : show-now-playing
  : prev-track
  : next-track

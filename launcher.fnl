@@ -14,7 +14,8 @@ Type to narrow, RET to run the selection. What you type can also be:
 Every other input ends with fallback web searches.
 
   RET    run            s-RET  reveal in Finder     M-RET M-w  copy
-  s-l    Large Type     s-y    Quick Look
+  s-l    Large Type     s-y    Quick Look           s-e  open a file in Emacs
+  C-.    choose an action for the selection
 
 The items you pick most often move to the top.
 "
@@ -484,10 +485,48 @@ The items you pick most often move to the top.
                         #(let [app (hs.application.applicationForPID (: task :pid))]
                            (when app (: app :activate true)))))))
 
+(fn file? [candidate]
+  (and candidate candidate.path (or (= candidate.kind :file) (= candidate.kind :reveal))))
+
+(fn open-in-emacs [candidate]
+  (if (file? candidate)
+      (do
+        ((. (require :emacs) :emacsclient) ["-n" candidate.path])
+        (hs.timer.doAfter 0.2 #(hs.application.launchOrFocus :Emacs)))
+      (minibuffer.message "Only files open in Emacs")))
+
+(fn large-type-of [candidate input]
+  (large-type.show (if (and candidate (not= candidate.kind :none)) (value-of candidate) input)))
+
+(fn act [candidate input]
+  "Choose what to do with CANDIDATE from a list of the actions that apply to it."
+  (when (and candidate (not= candidate.kind :none))
+    (let [c candidate
+          path c.path
+          file (file? c)
+          items []]
+      (fn add [text key f] (table.insert items {: text :annotation key :run f}))
+      (if file (add "Open" "RET" #(open path)) (add "Run" "RET" #(run c)))
+      (when file (add "Open in Emacs" "s-e" #(open-in-emacs c)))
+      (when path (add "Reveal in Finder" "s-RET" #(open "-R" path)))
+      (add (if path "Copy Path" "Copy") "M-w" #(copy (value-of c)))
+      (when file (add "Copy Name" nil #(copy c.text)))
+      (when path (add "Quick Look" "s-y" #(quick-look c)))
+      (add "Large Type" "s-l" #(large-type-of c input))
+      (minibuffer.completing-read
+       (.. c.text ": ")
+       items
+       {:on-accept (fn [choice]
+                     (when choice
+                       (record-use c)
+                       (choice.run)))}))))
+
 (local actions
        {"M-w" #(when $1 (copy (value-of $1)))
-        "s-l" #(large-type.show (if (and $1 (not= $1.kind :none)) (value-of $1) $2))
-        "s-y" quick-look})
+        "s-l" large-type-of
+        "s-y" quick-look
+        "s-e" open-in-emacs
+        "C-." act})
 
 (fn show []
   "Open the launcher in the minibuffer."

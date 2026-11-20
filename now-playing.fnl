@@ -46,7 +46,12 @@ if [ -n \"$ffmpeg\" ] && \"$ffmpeg\" -v error -nostdin -y -i \"$file\" -map 0:v:
 dir=$(dirname \"$file\")
 images=$(ls \"$dir\" | grep -iE '\\.(jpe?g|png)$')
 image=$(printf '%s\\n' \"$images\" | grep -iE 'cover|folder|front' | head -n 1)
-[ -n \"$image\" ] || image=$(printf '%s\\n' \"$images\" | head -n 1)
+# Otherwise only the sole image of an album folder, not any image that happens
+# to sit next to a loose file in, say, Downloads.
+if [ -z \"$image\" ] && [ \"$(printf '%s\\n' \"$images\" | grep -c .)\" = 1 ] &&
+   [ \"$(ls \"$dir\" | grep -ciE '\\.(flac|mp3|m4a|aac|ogg|opus|wav|aiff?|ape|wma|wv)$')\" -ge 2 ]; then
+  image=$images
+fi
 [ -n \"$image\" ] && /usr/bin/sips -s format png -Z 256 \"$dir/$image\" --out \"$out\" >/dev/null 2>&1
 ")
 

@@ -20,7 +20,6 @@
 ;; General ==========================================
 ;; ==================================================
 
-(local music-app "Apple Music")
 
 ;; Windows ==========================================
 ;; ==================================================
@@ -96,7 +95,6 @@
          (app-binding :Calendar :a)
          (app-binding :Zoom :z)
          (app-binding :Mail :m)
-         (app-binding music-app :p)
          (app-binding-if-exists "Visual Studio Code" :v)
          (app-binding-if-exists "Google Chrome" :c)
          (app-binding-if-exists "Brave Browser" :b)
@@ -121,6 +119,18 @@
                        {:key :s
                         :title "Play or Pause"
                         :action "mpv:play-or-pause"}
+                       {:key "," :title "Back 10s" :action "mpv:seek-backward"
+                        :repeatable true}
+                       {:key "." :title "Forward 10s" :action "mpv:seek-forward"
+                        :repeatable true}
+                       {:mods [:shift] :key ","
+                        :title "Back 1m"
+                        :action "mpv:seek-backward-more"
+                        :repeatable true}
+                       {:mods [:shift] :key "."
+                        :title "Forward 1m"
+                        :action "mpv:seek-forward-more"
+                        :repeatable true}
                        {:key :m :title :Mute :action "mpv:mute"}
                        {:key :n :title "Now Playing" :action "mpv:show-now-playing"}
                        {:key :a :title "Open EMMS" :action "mpv:open-emms"}])
