@@ -192,9 +192,10 @@ The items you pick most often move to the top.
                   "Keeping the Mac awake"
                   "The Mac may sleep again"))
             "caffeinate prevent sleep")
-   (command "Play/Pause" (system-key :PLAY) "music media")
-   (command "Next Track" (system-key :NEXT) "music media")
-   (command "Previous Track" (system-key :PREVIOUS) "music media")
+   (command "Play/Pause" #((. (require :mpv) :play-or-pause)) "mpv music media")
+   (command "Next Track" #((. (require :mpv) :next-track)) "mpv music media")
+   (command "Previous Track" #((. (require :mpv) :prev-track)) "mpv music media")
+   (command "Now Playing" #((. (require :mpv) :show-now-playing)) "mpv music media song album art")
    (command "Mute" (system-key :MUTE) "volume sound")
    (command "Volume Up" (system-key :SOUND_UP) "sound")
    (command "Volume Down" (system-key :SOUND_DOWN) "sound")

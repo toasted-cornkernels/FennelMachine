@@ -108,27 +108,26 @@
 (local media-bindings [back-key
                        {:key :h
                         :title "Prev Track"
-                        :action "multimedia:prev-track"
+                        :action "mpv:prev-track"
                         :repeatable true}
                        {:key :j
                         :title "Volume Down"
-                        :action "multimedia:volume-down"
+                        :action "mpv:volume-down"
                         :repeatable true}
                        {:key :k
                         :title "Volume Up"
-                        :action "multimedia:volume-up"
+                        :action "mpv:volume-up"
                         :repeatable true}
                        {:key :l
                         :title "Next Track"
-                        :action "multimedia:next-track"
+                        :action "mpv:next-track"
                         :repeatable true}
                        {:key :s
                         :title "Play or Pause"
-                        :action "multimedia:play-or-pause"}
-                       {:key :m :title :Mute :action "multimedia:mute"}
-                       {:key :a
-                        :title (.. "Launch " music-app)
-                        :action (activate music-app)}])
+                        :action "mpv:play-or-pause"}
+                       {:key :m :title :Mute :action "mpv:mute"}
+                       {:key :n :title "Now Playing" :action "mpv:show-now-playing"}
+                       {:key :a :title "Open EMMS" :action "mpv:open-emms"}])
 
 (local emacs-bindings [back-key
                        {:key :c

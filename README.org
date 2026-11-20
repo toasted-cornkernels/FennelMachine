@@ -106,7 +106,7 @@ App Shortcuts are ordinary menu items, which the search (=Ctrl-Alt-SPC=) finds.
 are the apps (=/Applications=, =/System/Applications=, =~/Applications= and their
 subfolders such as Nix Apps), the panes of System Settings, system commands (lock,
 sleep, restart, shut down, log out, empty or open the Trash, eject, dark mode, keep
-awake, media keys, clipboard history), every Keyboard Shortcuts command, and
+awake, mpv and volume controls, clipboard history), every Keyboard Shortcuts command, and
 =Quit=, =Hide= and =Force Quit= for each running app. The ones you pick most often
 move to the top. Depending on what you type, it also offers:
 
@@ -176,6 +176,37 @@ recorded when:
 
 The checks are heuristics. Pause recording before copying a secret that none of them
 would catch.
+
+** Media (=Cmd-SPC p=)
+
+=mpv.fnl= controls mpv through its JSON IPC socket, so only mpv instances started
+with =--input-ipc-server= are found (EMMS starts its mpv that way). The echo area
+shows the result.
+
+| Key       | Action                                                    |
+|-----------+-----------------------------------------------------------|
+| =s=       | play or pause                                             |
+| =h= / =l= | previous / next track (repeatable), then show Now Playing |
+| =j= / =k= | mpv's volume down / up by 5 (repeatable)                  |
+| =m=       | mute or unmute mpv                                        |
+| =n=       | show or hide the Now Playing HUD                          |
+| =a=       | open EMMS's playlist in an Emacs frame named =EMMS=       |
+
+When several mpv instances are running, the keys control the one that is playing,
+else the one controlled last, else the newest. For the mpv that EMMS started, play,
+pause and tracks go through EMMS (=emms-pause=, =emms-next=, =emms-previous=), so
+its playlist and paused state stay in sync; volume and mute go to mpv directly. The
+launcher's =Play/Pause=, =Next Track=, =Previous Track= and =Now Playing= do the
+same, while its =Mute= and =Volume= commands still change the system volume.
+
+The Now Playing HUD (=now-playing.fnl=) shows the album art, title, artist, album,
+position and a progress bar in the top-right corner. It updates every second, hides
+after 8 seconds, and lets clicks through. The art is the file's embedded cover
+(extracted with ffmpeg), else an image in its folder (=cover=, =folder= or =front=
+first), cached as a PNG in the temporary directory. The files are read by a
+background process, so Hammerspoon never waits on them; music on an external drive
+needs Hammerspoon to be allowed to access removable volumes (System Settings ›
+Privacy & Security › Files and Folders).
 
 ** Help (=Cmd-SPC h=)
 
