@@ -146,4 +146,4 @@ System information, a world clock and a process list, like Emacs'
    {:on-accept #(signal $1 :TERM "Terminate")
     :actions {:s-k #(signal $1 :KILL "Force quit")}}))
 
-{: info : world-clock :processes list-processes}
+{: info : world-clock :processes list-processes : cities}

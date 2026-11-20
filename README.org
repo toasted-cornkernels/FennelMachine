@@ -106,7 +106,8 @@ App Shortcuts are ordinary menu items, which the search (=Ctrl-Alt-SPC=) finds.
 are the apps (=/Applications=, =/System/Applications=, =~/Applications= and their
 subfolders such as Nix Apps), the panes of System Settings, system commands (lock,
 sleep, restart, shut down, log out, empty or open the Trash, eject, dark mode, keep
-awake, mpv and volume controls, clipboard history), every Keyboard Shortcuts command, and
+awake, mpv and volume controls, clipboard history, converting a time between time
+zones), every Keyboard Shortcuts command, and
 =Quit=, =Hide= and =Force Quit= for each running app. The ones you pick most often
 move to the top. Depending on what you type, it also offers:
 
@@ -324,6 +325,56 @@ with an empty input evaluates the selected one again.
 
 Both process actions ask =y or n= first and name the process and its PID
 (=sysinfo.fnl=).
+
+** Time zone converter (=Convert Time= in the launcher)
+
+=timeconvert.fnl= converts a date and time between time zones in two steps. First,
+=lib/read-date.fnl= reads the date and time like =org-time-stamp=, with evil keys:
+three months of the Emacs calendar above =Convert: <2026-11-20 Fri 16:05 EST>=,
+starting at the current time. In normal state (=<N>= in the mode line) the keys move
+the date and time; a count such as =3= repeats the next one.
+
+| Key                         | Normal state                     |
+|-----------------------------+----------------------------------|
+| =h= / =l=                   | a day back / forward             |
+| =j= / =k=                   | a week forward / back (as drawn) |
+| =s-h=, =s-k= / =s-j=, =s-l= | a month back / forward           |
+| =H=, =J= / =K=, =L=         | a year back / forward            |
+| =M-h=, =M-j= / =M-k=, =M-l= | an hour back / forward           |
+| =M-H=, =M-J= / =M-K=, =M-L= | 30 minutes back / forward        |
+| =C-h=, =C-j= / =C-k=, =C-l= | a minute back / forward          |
+| =.=                         | today                            |
+| =i=, =a=, =s-v=             | insert state: type (or paste)    |
+| =RET=                       | accept                           |
+| =ESC=                       | quit                             |
+
+In insert state (=<I>=), type the date, time or zone; the prompt shows how it reads
+the input, e.g. =12/25 16:00 EST= => =<2026-12-25 Fri 16:00 EST>=, and the calendar
+shades the date. =ESC= applies it and returns to normal state; =RET= accepts it.
+Input it cannot read is shown after the date.
+
+| Input                                             | Reads as                               |
+|---------------------------------------------------+----------------------------------------|
+| =16:00=, =4pm=, =4:30 p.m.=, =noon=               | the time; otherwise the picker's       |
+| =2026-12-25=, =12/25=, =12/25/27=, =25.12.=       | the date; otherwise the picker's       |
+| =dec 25=, =25 December 2027=, =march=             | the date; without a year, the next one |
+| =25=                                              | that day of the picker's month         |
+| =fri=, =today=, =tomorrow=, =now=                 | the next Friday (or today), …          |
+| =+2d=, =+1w=, =-1m=, =+1y=, =+2tue=, =-fri=       | relative to today, like org            |
+| =++3d=                                            | relative to the picker's date          |
+| =EST=, =CET=, =Seoul=, =Germany=, =Europe/Berlin= | the time zone; otherwise the picker's  |
+
+An abbreviation names a region, not a fixed offset: =EST= in July reads as New York
+time (EDT). A zone alone (=Seoul=) is the current time there, or once you have
+moved the picker, its date and time there.
+
+Then pick the zone to convert to: recently used ones first, then the local zone, the
+world clock's cities, common zones and all of =zone.tab=, each with the converted time.
+Type a city, country, zone or abbreviation. =RET= shows the result in the echo area
+and copies it, e.g. =2026-12-25 Fri 22:00 CET=.
+
+Times come from the system's time zone database (=lib/tz.fnl= reads
+=/var/db/timezone/zoneinfo=), past 2037 by each zone's DST rule.
 
 ** Media (=Cmd-SPC p=)
 

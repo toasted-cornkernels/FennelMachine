@@ -64,7 +64,7 @@ in any order, anywhere in a candidate.
     (set canvas nil)))
 
 (fn draw [lines selected-line]
-  "Show LINES, each {:left styled-text :right styled-text?}, in a full-width
+  "Show LINES, each {:left styled-text :right styled-text? :bg colour?}, in a full-width
   strip at the bottom of the screen, highlighting line SELECTED-LINE."
   (let [frame (screen-frame)
         h (+ (* (length lines) line-height) (* 2 pad-y))
@@ -81,6 +81,10 @@ in any order, anywhere in a candidate.
     (each [i line (ipairs lines)]
       (let [text-frame {:x pad-x :y (+ pad-y (* (- i 1) line-height))
                         :w (- frame.w (* 2 pad-x)) :h (+ line-height 2)}]
+        (when line.bg
+          (table.insert elements
+                        {:type :rectangle :action :fill :fillColor {:hex line.bg}
+                         :frame {:x 0 :y text-frame.y :w frame.w :h line-height}}))
         (table.insert elements {:type :text :text line.left :frame text-frame})
         (when line.right
           (table.insert elements {:type :text :text line.right :frame text-frame}))))
@@ -231,10 +235,14 @@ in any order, anywhere in a candidate.
 
 (fn prompt-line []
   (let [{: input : point : matches : selected} session
-        count (if session.collection
+        count (if session.view ""
+                  session.collection
                   (string.format "%d/%d " (if (> (length matches) 0) selected 0)
                                  (length matches))
                   "…/… ")
+        suffix (when session.suffix
+                 (let [(ok text) (pcall session.suffix input)]
+                   (if ok text (do (print (.. "minibuffer suffix: " (tostring text))) nil))))
         after (input:sub (+ point 1))
         cursor-end (next-char input point)
         under (if (= point (length input)) " " (input:sub (+ point 1) cursor-end))]
@@ -244,10 +252,19 @@ in any order, anywhere in a candidate.
         (styled under palette.bg colors.cursor)
         (styled (if (= point (length input)) "" (after:sub (+ (length under) 1)))
                 palette.fg)
+        (if suffix (.. (styled "  " palette.fg) (styled suffix palette.fg colors.selection))
+            (styled "" palette.fg))
         (if session.flash (styled (.. " [" session.flash "]") palette.dim)
             (styled "" palette.fg)))))
 
-(fn render []
+(fn render-view []
+  (let [(ok lines) (pcall session.view (prompt-line))]
+    (if ok
+        (draw lines nil)
+        (do (print (.. "minibuffer view: " (tostring lines)))
+            (draw [{:left (prompt-line)}] nil)))))
+
+(fn render-candidates []
   (let [chars (max-chars)
         lines [{:left (prompt-line)}]]
     (for [i (+ session.offset 1)
@@ -260,11 +277,14 @@ in any order, anywhere in a candidate.
                                           palette.fg)
                        :right (right-aligned annotation palette.dim)})))
     (draw lines (when (> (length session.matches) 0)
-                  (+ 1 (- session.selected session.offset))))
-    (when session.on-change
-      (let [(ok err) (pcall session.on-change session.matches
-                            (. session.matches session.selected) session.input)]
-        (when (not ok) (print (.. "minibuffer on-change: " (tostring err))))))))
+                  (+ 1 (- session.selected session.offset))))))
+
+(fn render []
+  (if session.view (render-view) (render-candidates))
+  (when session.on-change
+    (let [(ok err) (pcall session.on-change session.matches
+                          (. session.matches session.selected) session.input)]
+      (when (not ok) (print (.. "minibuffer on-change: " (tostring err)))))))
 
 (fn flash [text]
   (set session.flash text)
@@ -383,8 +403,14 @@ in any order, anywhere in a candidate.
                             hs.eventtap.event.properties.keyboardEventAutorepeat))
         desc (and key (emacs-key (mods-of flags) key))
         command (. commands desc)
-        action (and desc session.actions (. session.actions desc))]
+        action (and desc session.actions (. session.actions desc))
+        key-fn (and desc session.keys
+                    (if (= (type session.keys) :function)
+                        #(session.keys desc chars)
+                        (. session.keys desc)))]
     (if action (do (run-action action) true)
+        ;; A session key that declines (returns false) gets the usual meaning.
+        (and key-fn (key-fn)) (do (render) true)
         (and flags.cmd (= key :v))
         (do (insert (or (hs.pasteboard.getContents) "")) (render) true)
         (or (= key :return) (= key :padenter)) (do (accept flags) true)
@@ -418,7 +444,17 @@ in any order, anywhere in a candidate.
                                               matches of COLLECTION, or {:only [..]}
                                               instead of them; not filtered
     :actions {key (fn [candidate input])}     extra keys such as s-l that end the read
-                                              and act on the selection"
+                                              and act on the selection
+    :keys {key (fn [])}                       extra keys that keep reading, e.g. to
+                                              move a calendar; return false to give
+                                              the key its usual meaning. Or one
+                                              (fn [key chars]) for every key
+    :view (fn [prompt-line])                  the lines ({:left :right} styled text,
+                                              :bg a line's background colour)
+                                              to show instead of the candidates;
+                                              include PROMPT-LINE, the input line
+    :suffix (fn [input])                      text shown highlighted after the input,
+                                              e.g. how it is read"
   (close)
   (hide)
   (set session {: prompt
@@ -433,6 +469,9 @@ in any order, anywhere in a candidate.
                 :on-change opts.on-change
                 :dynamic opts.dynamic
                 :actions opts.actions
+                :keys opts.keys
+                :view opts.view
+                :suffix opts.suffix
                 :tap (hs.eventtap.new [hs.eventtap.event.types.keyDown] on-key)})
   (when collection
     (set session.collection (icollect [_ c (ipairs collection)] (normalize c))))
@@ -485,6 +524,11 @@ in any order, anywhere in a candidate.
  :clear (fn [] "Clear the echo area unless the minibuffer is reading."
           (when (not session) (hide)))
  : completing-read
+ : max-chars
+ :set-input (fn [input] "Replace the input of the active `completing-read`."
+              (when session
+                (set-input input (length input))
+                (render)))
  : set-collection
  : refresh
  : y-or-n-p

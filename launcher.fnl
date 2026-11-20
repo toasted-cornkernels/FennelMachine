@@ -197,6 +197,8 @@ The items you pick most often move to the top.
    (command "Next Track" #((. (require :mpv) :next-track)) "mpv music media")
    (command "Previous Track" #((. (require :mpv) :prev-track)) "mpv music media")
    (command "Now Playing" #((. (require :mpv) :show-now-playing)) "mpv music media song album art")
+   (command "Convert Time" #((. (require :timeconvert) :convert))
+            "time zone tz date calendar world clock")
    (command "Mute" (system-key :MUTE) "volume sound")
    (command "Volume Up" (system-key :SOUND_UP) "sound")
    (command "Volume Down" (system-key :SOUND_DOWN) "sound")
