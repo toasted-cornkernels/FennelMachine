@@ -103,6 +103,11 @@
   (when (hs.fs.displayName (.. :/Applications/ app-name :.app))
     {: key :title app-name :action (activate app-name)}))
 
+(local radio-bindings
+       [{:key :p :title "Play Station" :action "radio:choose-station"}
+        {:key :s :title :Stop :action "radio:stop"}
+        {:mods [:shift] :key :r :title :Toggle :action "radio:toggle"}])
+
 (local app-bindings
        (desparsify
         [(app-binding :Emacs :e)
@@ -115,7 +120,8 @@
          (app-binding-if-exists "Visual Studio Code" :v)
          (app-binding-if-exists "Google Chrome" :c)
          (app-binding-if-exists "Brave Browser" :b)
-         (app-binding-if-exists :KakaoTalk :k)]))
+         (app-binding-if-exists :KakaoTalk :k)
+         {:mods [:shift] :key :r :title :Radio :items radio-bindings}]))
 
 (local media-bindings [{:key :h
                         :title "Prev Track"
@@ -150,8 +156,6 @@
                         :repeatable true}
                        {:key :m :title :Mute :action "mpv:mute"}
                        {:key :n :title "Now Playing" :action "mpv:show-now-playing"}
-                       {:key :r :title :Radio :action "radio:choose-station"}
-                       {:mods [:shift] :key :r :title "Stop Radio" :action "radio:stop"}
                        {:key :a :title "Open EMMS" :action "mpv:open-emms"}])
 
 (local emacs-bindings [{:key :c
@@ -255,15 +259,15 @@
         {:key :l :title "Space Right" :action "spaces:space-right" :repeatable true}
         {:mods [:shift] :key :n :title "New Desktop" :action "spaces:new-space"}
         {:key :d :title "Close Desktop" :action "spaces:close-space"}
-        {:key :1 :title "Desktop 1" :action "spaces:goto-desktop-1"}
-        {:key :2 :title "Desktop 2" :action "spaces:goto-desktop-2"}
-        {:key :3 :title "Desktop 3" :action "spaces:goto-desktop-3"}
-        {:key :4 :title "Desktop 4" :action "spaces:goto-desktop-4"}
-        {:key :5 :title "Desktop 5" :action "spaces:goto-desktop-5"}
-        {:key :6 :title "Desktop 6" :action "spaces:goto-desktop-6"}
-        {:key :7 :title "Desktop 7" :action "spaces:goto-desktop-7"}
-        {:key :8 :title "Desktop 8" :action "spaces:goto-desktop-8"}
-        {:key :9 :title "Desktop 9" :action "spaces:goto-desktop-9"}])
+        {:key :1 :title "Space 1" :action "spaces:goto-space-1"}
+        {:key :2 :title "Space 2" :action "spaces:goto-space-2"}
+        {:key :3 :title "Space 3" :action "spaces:goto-space-3"}
+        {:key :4 :title "Space 4" :action "spaces:goto-space-4"}
+        {:key :5 :title "Space 5" :action "spaces:goto-space-5"}
+        {:key :6 :title "Space 6" :action "spaces:goto-space-6"}
+        {:key :7 :title "Space 7" :action "spaces:goto-space-7"}
+        {:key :8 :title "Space 8" :action "spaces:goto-space-8"}
+        {:key :9 :title "Space 9" :action "spaces:goto-space-9"}])
 
 (local system-bindings
        [{:key :i :title "System Info" :action "sysinfo:info"}

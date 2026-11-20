@@ -227,18 +227,20 @@ window and reopens the switcher.
 
 =spaces.fnl= switches desktops like a tab bar (Emacs' =tab-bar-mode=).
 
-| Key                      | Action                                                 |
-|--------------------------+--------------------------------------------------------|
-| =t t=                    | pick a Space; annotations list its apps                |
-| =t TAB=                  | the last Space                                         |
-| =t h= / =t l=, =[= / =]= | the Space to the left / right (repeatable)             |
-| =t 1= … =t 9=            | desktop N                                              |
-| =t N=                    | new desktop, then switch to it                         |
-| =t d=                    | close the current desktop (asks first; never the last) |
+| Key                      | Action                                                     |
+|--------------------------+------------------------------------------------------------|
+| =t t=                    | pick a Space, most recent first; annotations list its apps |
+| =t TAB=                  | the last Space                                             |
+| =t h= / =t l=, =[= / =]= | the Space to the left / right (repeatable)                 |
+| =t 1= … =t 9=            | the Nth Space, full-screen apps included                   |
+| =t N=                    | new desktop, then switch to it                             |
+| =t d=                    | close the current desktop (asks first; never the last)     |
 
-Switching uses the system's Switch to Desktop and Move left/right a space shortcuts
-(=Keyboard Shortcuts commands=), so it animates as usual. Full-screen apps are
-reached through =t t=.
+Spaces are numbered as Mission Control orders them, like tab-bar's tabs: with
+Desktop 1 and a full-screen app, =t 2= is the app. Switching uses the system's
+Switch to Desktop and Move left/right a space shortcuts (=Keyboard Shortcuts
+commands=), or focuses a full-screen app's window, so it slides as usual; Mission
+Control is the fallback.
 
 ** Layouts (=Cmd-SPC D=)
 
@@ -341,8 +343,6 @@ started with =--input-ipc-server= is found. The echo area shows the result; seek
 | =m=           | mute or unmute mpv                                        |
 | =n=           | show or hide the Now Playing HUD                          |
 | =a=           | open EMMS's playlist in an Emacs frame named =EMMS=       |
-| =r=           | play an internet radio station                            |
-| =R=           | stop the radio                                            |
 
 When several mpv instances are running, the keys control the one that is playing,
 else the one controlled last, else the newest. For the mpv that EMMS started, play,
@@ -350,11 +350,6 @@ pause and tracks go through EMMS (=emms-pause=, =emms-next=, =emms-previous=), s
 its playlist and paused state stay in sync; volume and mute go to mpv directly. The
 launcher's =Play/Pause=, =Next Track=, =Previous Track= and =Now Playing= do the
 same, while its =Mute= and =Volume= commands still change the system volume.
-
-The radio (=radio.fnl=) plays Emacs' =eradio-channels= in its own background mpv
-(socket =$TMPDIR/mpv-radio.sock=), so the keys above control it while it plays, and
-picking another station reuses it. The stations are read from Emacs when it is
-running and cached; otherwise a few defaults are offered.
 
 The Now Playing HUD (=now-playing.fnl=) shows the album art, title, artist, album,
 position and a progress bar in the top-right corner. It updates every second, hides
@@ -364,6 +359,23 @@ after 8 seconds, and lets clicks through. The art is the file's embedded cover
 background process, so Hammerspoon never waits on them; music on an external drive
 needs Hammerspoon to be allowed to access removable volumes (System Settings ›
 Privacy & Security › Files and Folders).
+
+** Radio (=Cmd-SPC a R=)
+
+=radio.fnl= plays internet radio like eradio, under the same keys as =SPC a R= in
+=init.el=.
+
+| Key     | Action                                                                  |
+|---------+-------------------------------------------------------------------------|
+| =a R p= | pick a station and play it                                              |
+| =a R s= | stop the radio                                                          |
+| =a R R= | stop the radio if it is on, else play the last station (or pick one)    |
+
+The stations are Emacs' =eradio-channels=: asked of Emacs (loading eradio if
+needed), else read from =~/.emacs.d/init.el= when its server isn't running. They
+play in a background mpv of their own (socket =$TMPDIR/mpv-radio.sock=), which
+picking another station reuses and the Media keys also control (pause, volume, mute,
+Now Playing).
 
 ** Help (=Cmd-SPC h=)
 

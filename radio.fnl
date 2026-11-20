@@ -1,5 +1,5 @@
 "Internet radio, like eradio: pick a station from Emacs' eradio-channels and
-play it in a background mpv, which the other Media keys then control"
+play it in a background mpv, which the Media keys also control"
 
 (local minibuffer (require :lib.minibuffer))
 (local emacs (require :emacs))
@@ -10,25 +10,37 @@ play it in a background mpv, which the other Media keys then control"
                   (.. "/etc/profiles/per-user/" (os.getenv :USER) "/bin/mpv")
                   "/run/current-system/sw/bin/mpv"])
 
-;; Used when Emacs or eradio isn't running.
-(local default-stations
-       [{:name "WFUV 90.7" :url "https://onair.wfuv.org/onair-aacplus"}
-        {:name "WNYC 93.9 FM" :url "https://fm939.wnyc.org/wnycfm.aac"}
-        {:name "WBBR 1130 AM" :url "http://14123.live.streamtheworld.com/WBBRAMAAC_SC"}])
+;; Read when Emacs can't be asked, e.g. its server isn't running.
+(local init-files [(.. (os.getenv :HOME) "/.emacs.d/init.el")
+                   (.. (os.getenv :HOME) "/.config/emacs/init.el")])
 
 (var stations nil)
 
 (local stations-file (.. (: (or (os.getenv :TMPDIR) "/tmp") :gsub "/$" "")
                          "/hammerspoon-radio.json"))
 
+(fn init-file-stations []
+  "The (\"name\" . \"url\") pairs of the eradio-channels setting in the Emacs
+  init file."
+  (accumulate [found nil _ path (ipairs init-files)]
+    (or found
+        (let [file (io.open path)
+              text (when file (let [t (file:read :a)] (file:close) t))
+              start (and text (text:find "%(eradio%-channels%s+'%("))
+              form (and start (text:match "%b()" start))
+              found (when form
+                      (icollect [name url (form:gmatch "%(%s*\"(.-)\"%s*%.%s*\"(.-)\"%s*%)")]
+                        {: name : url}))]
+          (when (and found (> (length found) 0)) found)))))
+
 (fn read-stations [callback]
-  "Call CALLBACK with the stations of eradio-channels, else the last ones read,
-  else the defaults. Emacs writes them to a file: emacsclient garbles long
-  non-ASCII output."
+  "Call CALLBACK with the stations of eradio-channels: from Emacs (loading
+  eradio if needed), else the last ones read, else the init file's. Emacs
+  writes them to a file: emacsclient garbles long non-ASCII output."
   (os.remove stations-file)
   (emacs.emacsclient
    ["-e" (string.format
-          "(when (boundp 'eradio-channels)
+          "(when (and (require 'json) (require 'eradio nil t))
              (let ((coding-system-for-write 'utf-8))
                (with-temp-file %q
                  (insert (json-encode
@@ -44,7 +56,7 @@ play it in a background mpv, which the other Media keys then control"
        (os.remove stations-file)
        (when (and ok (= (type decoded) :table) (> (length decoded) 0))
          (set stations decoded))
-       (callback (or stations default-stations))))))
+       (callback (or stations (init-file-stations) []))))))
 
 (fn mpv-path []
   (accumulate [found nil _ path (ipairs mpv-paths)]
@@ -69,8 +81,11 @@ play it in a background mpv, which the other Media keys then control"
                                     " >/dev/null 2>&1 &")])
              :start)))))
 
+(local last-station-key :radio.last-station)
+
 (fn play [station]
   "Play STATION in the running radio mpv, or start one."
+  (hs.settings.set last-station-key {:name station.name :url station.url})
   (if (not (hs.fs.attributes socket))
       (do (spawn station)
           (minibuffer.message (.. "Playing " station.name)))
@@ -100,13 +115,15 @@ play it in a background mpv, which the other Media keys then control"
    (fn [playing]
      (read-stations
       (fn [list]
-        (minibuffer.completing-read
-         "Radio: "
-         (icollect [_ s (ipairs list)]
-           {:text s.name
-            :annotation (.. (host-of s.url) (if (= s.name playing) "  playing" ""))
-            :station s})
-         {:on-accept (fn [c] (when c (play c.station)))}))))))
+        (if (= 0 (length list))
+            (minibuffer.message "No stations: eradio-channels isn't set in Emacs")
+            (minibuffer.completing-read
+             "Radio: "
+             (icollect [_ s (ipairs list)]
+               {:text s.name
+                :annotation (.. (host-of s.url) (if (= s.name playing) "  playing" ""))
+                :station s})
+             {:on-accept (fn [c] (when c (play c.station)))})))))))
 
 (fn stop []
   "Quit the radio mpv."
@@ -115,5 +132,16 @@ play it in a background mpv, which the other Media keys then control"
                  (os.remove socket)
                  (minibuffer.message (if answer "Radio stopped" "The radio isn't on")))))
 
+(fn toggle []
+  "Stop the radio if it is on, else play the last station again (or pick
+  one), like eradio-toggle."
+  (playing-title
+   (fn [playing]
+     (let [last (hs.settings.get last-station-key)]
+       (if playing (stop)
+           last (play last)
+           (choose-station))))))
+
 {: choose-station
- : stop}
+ : stop
+ : toggle}
