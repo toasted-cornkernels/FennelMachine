@@ -55,6 +55,7 @@ it, a copy is not recorded when:
 (var entries [])
 (var paused false)
 (var watcher nil)
+(var ignore-until 0)
 
 (fn history [] entries)
 
@@ -137,6 +138,11 @@ quoted, or unquoted with a digit (so code like token = get_token() passes)."
   "Record the clipboard again."
   (set-paused false))
 
+(fn ignore-for [seconds]
+  "Quietly leave out clipboard changes of the next SECONDS, e.g. while a
+  command borrows the clipboard and restores it."
+  (set ignore-until (+ (hs.timer.secondsSinceEpoch) seconds)))
+
 (fn toggle-pause []
   "Pause or resume recording the clipboard."
   (set-paused (not paused)))
@@ -180,7 +186,8 @@ quoted, or unquoted with a digit (so code like token = get_token() passes)."
     (hs.settings.clear legacy-settings-key))
   (set watcher (hs.pasteboard.watcher.new
                 (fn [text]
-                  (when (and text (not paused) (not (ignored?)))
+                  (when (and text (not paused) (not (ignored?))
+                             (>= (hs.timer.secondsSinceEpoch) ignore-until))
                     (remember text)))))
   (: watcher :start)
   watcher)
@@ -194,4 +201,5 @@ quoted, or unquoted with a digit (so code like token = get_token() passes)."
  : pause
  : resume
  : toggle-pause
+ : ignore-for
  : secret?}

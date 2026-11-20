@@ -183,6 +183,146 @@ recorded when:
 The checks are heuristics. Pause recording before copying a secret that none of them
 would catch.
 
+** Windows (=Cmd-SPC w=)
+
+=windows.fnl= arranges the focused window and its neighbours, like Emacs' =C-x 4=
+and winner-mode.
+
+| Key             | Action                                                  |
+|-----------------+---------------------------------------------------------|
+| =h= =j= =k= =l= | focus the window to the left / below / above / right    |
+| =C-h= … =C-l=   | move the window (repeatable)                            |
+| =s-h= … =s-l=   | move a border (repeatable)                              |
+| =H= … =L=       | resize to that half                                     |
+| =w=             | the last window                                         |
+| =m= / =M=       | maximize / minimize                                     |
+| =c=             | center and enlarge                                      |
+| =g=             | the grid                                                |
+| =d=             | close the window                                        |
+| =f=             | toggle full screen                                      |
+| ===             | balance: tile the screen's windows                      |
+| =v= / =s=       | split side by side / stacked with the last window       |
+| =r= / =R=       | rotate the screen's windows forward / back (repeatable) |
+| =u= / =U=       | undo / redo the last window change (repeatable)         |
+
+Undo remembers the frames of up to 50 changes, across all the commands above and
+restoring a layout; a change that moved several windows undoes in one step.
+
+** Buffers (=Cmd-SPC b=)
+
+=buffers.fnl= treats windows as buffers.
+
+| Key           | Action                                                   |
+|---------------+----------------------------------------------------------|
+| =b b=         | switch to any window by name, most recently used first   |
+| =b n= / =b p= | next / previous window of the frontmost app (repeatable) |
+| =b TAB=       | the last window                                          |
+| =b d=         | close the window                                         |
+
+The switcher lists windows on every Space, minimized and hidden ones included (it
+unminimizes or unhides them), annotated with the app. =s-w= closes the selected
+window and reopens the switcher.
+
+** Spaces (=Cmd-SPC t=, =Cmd-SPC [= / =]=)
+
+=spaces.fnl= switches desktops like a tab bar (Emacs' =tab-bar-mode=).
+
+| Key                      | Action                                                 |
+|--------------------------+--------------------------------------------------------|
+| =t t=                    | pick a Space; annotations list its apps                |
+| =t TAB=                  | the last Space                                         |
+| =t h= / =t l=, =[= / =]= | the Space to the left / right (repeatable)             |
+| =t 1= … =t 9=            | desktop N                                              |
+| =t N=                    | new desktop, then switch to it                         |
+| =t d=                    | close the current desktop (asks first; never the last) |
+
+Switching uses the system's Switch to Desktop and Move left/right a space shortcuts
+(=Keyboard Shortcuts commands=), so it animates as usual. Full-screen apps are
+reached through =t t=.
+
+** Layouts (=Cmd-SPC D=)
+
+=layouts.fnl= saves and restores where the windows are, like Emacs' =desktop=
+(=SPC D= in =init.el=).
+
+| Key   | Action                                          |
+|-------+-------------------------------------------------|
+| =D s= | save the layout under a name (overwriting asks) |
+| =D r= | restore a layout                                |
+| =D d= | delete a layout (asks first)                    |
+| =D R= | restore the layout last saved or restored again |
+
+A layout records the visible, standard windows of every Space: app, title, frame
+and screen. Restoring matches windows by app and title; windows of the same app
+whose titles changed take the remaining frames in order. Apps that aren't running
+are skipped, not launched, and the echo area counts the windows that weren't open.
+A layout saved on a screen that is gone is scaled onto the main screen. Layouts are
+kept in =hs.settings=; =Cmd-SPC w u= undoes a restore.
+
+** Quit (=Cmd-SPC q=)
+
+| Key   | Action                                                             |
+|-------+--------------------------------------------------------------------|
+| =q q= | quit the frontmost app, as =Cmd-Q= does (it may still ask to save) |
+| =q Q= | force quit it; unsaved changes are lost                            |
+| =q r= | relaunch it (Hammerspoon itself reloads)                           |
+| =q f= | close the window                                                   |
+
+Each asks =y or n= first (=quit.fnl=).
+
+** Embark (=Cmd-SPC e e=)
+
+=embark.fnl= acts on the selected text, like Emacs' =embark-act=. The text is the
+accessibility selection, else what =Cmd-C= copies (the clipboard and its history
+are left as they were), else the clipboard. The actions offered depend on it:
+
+- a file or folder path: Open, Reveal in Finder, Open in Emacs;
+- a URL: Open URL;
+- arithmetic: Copy Result;
+- always: the launcher's web searches, Copy, Large Type, Count Words, Edit in Emacs
+  (a new =*selection*= buffer) and Ask ChatGPT (pasted into the composer as a draft,
+  not sent).
+
+** Toggles (=Cmd-SPC T=)
+
+=toggles.fnl= flips system settings, like Spacemacs' =SPC t=; the echo area shows
+the new state.
+
+| Key   | Toggle                                            |
+|-------+---------------------------------------------------|
+| =T F= | full screen                                       |
+| =T t= | dark mode                                         |
+| =T d= | Dock hiding                                       |
+| =T m= | menu bar hiding                                   |
+| =T h= | hidden files in Finder (asks, as Finder restarts) |
+| =T n= | Do Not Disturb                                    |
+| =T a= | keep awake (prevents idle sleep)                  |
+| =T v= | output mute                                       |
+| =T w= | Wi-Fi (asks before turning it off)                |
+| =T b= | Bluetooth (asks before turning it off)            |
+
+Bluetooth uses =blueutil=, which needs Hammerspoon to be allowed to use Bluetooth
+(System Settings › Privacy & Security › Bluetooth); until then the toggle says so
+and opens that pane.
+
+** Eval (=Cmd-SPC :=)
+
+=eval.fnl= evaluates a Fennel expression in Hammerspoon, like Emacs' =M-:=. Short
+values go to the echo area, long ones to the help HUD; errors are echoed, with the
+traceback in the console. Earlier expressions are offered as candidates, and =RET=
+with an empty input evaluates the selected one again.
+
+** System (=Cmd-SPC A=)
+
+| Key   | Action                                                                 |
+|-------+------------------------------------------------------------------------|
+| =A i= | macOS, host, CPU, memory, uptime, load, power, disks and network       |
+| =A c= | world clock for the cities of =elispm/world-clock-cities= in =init.el= |
+| =A p= | your processes, by CPU use: =RET= terminates one, =s-k= force quits it |
+
+Both process actions ask =y or n= first and name the process and its PID
+(=sysinfo.fnl=).
+
 ** Media (=Cmd-SPC p=)
 
 =mpv.fnl= controls mpv through its JSON IPC socket: the one given with
@@ -196,11 +336,13 @@ started with =--input-ipc-server= is found. The echo area shows the result; seek
 | =s=           | play or pause                                             |
 | =h= / =l=     | previous / next track (repeatable), then show Now Playing |
 | =,= / =.=     | seek back / forward 10 seconds (repeatable)               |
-| =S-,= / =S-.= | seek back / forward 1 minute (repeatable)                 |
+| =<= / =>=     | seek back / forward 1 minute (repeatable)                 |
 | =j= / =k=     | mpv's volume down / up by 5 (repeatable)                  |
 | =m=           | mute or unmute mpv                                        |
 | =n=           | show or hide the Now Playing HUD                          |
 | =a=           | open EMMS's playlist in an Emacs frame named =EMMS=       |
+| =r=           | play an internet radio station                            |
+| =R=           | stop the radio                                            |
 
 When several mpv instances are running, the keys control the one that is playing,
 else the one controlled last, else the newest. For the mpv that EMMS started, play,
@@ -208,6 +350,11 @@ pause and tracks go through EMMS (=emms-pause=, =emms-next=, =emms-previous=), s
 its playlist and paused state stay in sync; volume and mute go to mpv directly. The
 launcher's =Play/Pause=, =Next Track=, =Previous Track= and =Now Playing= do the
 same, while its =Mute= and =Volume= commands still change the system volume.
+
+The radio (=radio.fnl=) plays Emacs' =eradio-channels= in its own background mpv
+(socket =$TMPDIR/mpv-radio.sock=), so the keys above control it while it plays, and
+picking another station reuses it. The stations are read from Emacs when it is
+running and cached; otherwise a few defaults are offered.
 
 The Now Playing HUD (=now-playing.fnl=) shows the album art, title, artist, album,
 position and a progress bar in the top-right corner. It updates every second, hides

@@ -10,7 +10,7 @@
 (local art-size (- height (* 2 pad)))
 (local display-seconds 8)
 (local properties [:path :working-directory :metadata :media-title :pause
-                   :idle-active :time-pos :duration])
+                   :idle-active :time-pos :duration :seekable])
 
 (local hud {})
 
@@ -113,12 +113,14 @@ fi
         x (+ pad art-size pad)
         w (- width x pad)
         title (or (tag s.metadata :title) s.media-title "Nothing playing")
+        ;; Live streams report their buffered stretch as the duration.
+        duration (when (not= s.seekable false) s.duration)
         state (if (not s.responding) "mpv isn't responding"
                   s.idle-active "Idle"
                   (.. (if s.pause "⏸ " "▶ ") (clock s.time-pos)
-                      (if s.duration (.. " / " (clock s.duration)) "")))
-        progress (if (and s.duration (> s.duration 0) s.time-pos)
-                     (math.min 1 (/ s.time-pos s.duration))
+                      (if duration (.. " / " (clock duration)) "")))
+        progress (if (and duration (> duration 0) s.time-pos)
+                     (math.min 1 (/ s.time-pos duration))
                      0)
         art (when hud.art-file (hs.image.imageFromPath hud.art-file))
         art-frame {:x pad :y pad :w art-size :h art-size}

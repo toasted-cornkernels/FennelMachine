@@ -54,8 +54,10 @@
 ;; Focus composer ===================================
 ;; ==================================================
 
-(fn focus-composer []
-  "Move keyboard focus to the message composer of the open conversation.
+(fn focus-composer [on-focused wake-seconds]
+  "Move keyboard focus to the message composer of the open conversation, then
+  call ON-FOCUSED, if given. WAKE-SECONDS overrides how long to wait for the
+  accessibility tree, e.g. right after launching the app.
   Setting AXFocused makes Chromium call focus() on the composer's DOM node, so
   the editor keeps its draft and restores its previous caret position. Focus
   is applied asynchronously by the renderer, hence the verify-and-retry loop,
@@ -69,14 +71,17 @@
   (let [app (hs.application.frontmostApplication)]
     (var limit max-attempts)
     (fn wake-tree []
-      (set limit wake-attempts)
+      (set limit (if wake-seconds
+                     (math.ceil (/ wake-seconds retry-interval))
+                     wake-attempts))
       (pcall #(: (hs.axuielement.applicationElement app)
                  :setAttributeValue :AXEnhancedUserInterface true)))
     (fn attempt [n]
       (when (: app :isFrontmost)
         (let [window (: app :focusedWindow)
               composer (and window (find-composer window))]
-          (if (and composer (focused? app composer)) nil
+          (if (and composer (focused? app composer))
+              (when on-focused (on-focused))
               (> n limit) (do
                             (log.w "Could not focus the composer")
                             (alert "ChatGPT composer not found"))

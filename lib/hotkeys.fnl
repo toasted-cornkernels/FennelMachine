@@ -39,7 +39,7 @@ render chords in Emacs notation and find where a function was defined.
         (if (. hs.keycodes.map (k:lower)) (k:lower) k))))
 
 (fn chord [mods key]
-  "MODS + KEY in Emacs notation: s-SPC, C-<f2>, M-S-[, s-J."
+  "MODS + KEY in Emacs notation: s-SPC, C-<f2>, M-{, s-J."
   (let [key (key-name key)
         key (if (and (> (or (utf8.len key) (length key)) 1)
                      (not (. plain-keys key)))

@@ -25,11 +25,16 @@
 ;; ==================================================
 
 (local window-bindings
-       [{:key :hjkl :title :Move}
-        {:key :h :action "windows:move-left-repeatedly" :repeatable true}
-        {:key :j :action "windows:move-down-repeatedly" :repeatable true}
-        {:key :k :action "windows:move-up-repeatedly" :repeatable true}
-        {:key :l :action "windows:move-right-repeatedly" :repeatable true}
+       [{:key :hjkl :title :Focus}
+        {:key :h :action "windows:jump-window-left" :repeatable true}
+        {:key :j :action "windows:jump-window-below" :repeatable true}
+        {:key :k :action "windows:jump-window-above" :repeatable true}
+        {:key :l :action "windows:jump-window-right" :repeatable true}
+        {:mods [:ctrl] :key :hjkl :title :Move}
+        {:mods [:ctrl] :key :h :action "windows:move-left-repeatedly" :repeatable true}
+        {:mods [:ctrl] :key :j :action "windows:move-down-repeatedly" :repeatable true}
+        {:mods [:ctrl] :key :k :action "windows:move-up-repeatedly" :repeatable true}
+        {:mods [:ctrl] :key :l :action "windows:move-right-repeatedly" :repeatable true}
         {:mods [:cmd] :key :hjkl :title :Resize}
         {:mods [:cmd]
          :key :h
@@ -74,7 +79,19 @@
          :title :Center
          :action "windows:center-enlarge-with-rate-repeatedly"}
         {:key :g :title :Grid :action "windows:show-grid"}
-        {:key :u :title :Undo :action "windows:undo"}])
+        {:key :d :title :Close :action "windows:close-window"}
+        {:key :f :title "Full Screen" :action "windows:toggle-fullscreen"}
+        {:key "=" :title :Balance :action "windows:tile-windows"}
+        {:key :v :title "Split with Last" :action "windows:split-side-by-side"}
+        {:key :s :title "Stack with Last" :action "windows:split-stacked"}
+        {:key :r :title :Rotate :action "windows:rotate-windows-down" :repeatable true}
+        {:mods [:shift]
+         :key :r
+         :title "Rotate Back"
+         :action "windows:rotate-windows-up"
+         :repeatable true}
+        {:key :u :title :Undo :action "windows:undo" :repeatable true}
+        {:mods [:shift] :key :u :title :Redo :action "windows:redo" :repeatable true}])
 
 ;; Apps Menu ========================================
 ;; ==================================================
@@ -133,6 +150,8 @@
                         :repeatable true}
                        {:key :m :title :Mute :action "mpv:mute"}
                        {:key :n :title "Now Playing" :action "mpv:show-now-playing"}
+                       {:key :r :title :Radio :action "radio:choose-station"}
+                       {:mods [:shift] :key :r :title "Stop Radio" :action "radio:stop"}
                        {:key :a :title "Open EMMS" :action "mpv:open-emms"}])
 
 (local emacs-bindings [{:key :c
@@ -201,6 +220,62 @@
          :title "Toggle Recording"
          :action "clipboard:toggle-pause"}])
 
+(local buffer-bindings
+       [{:key :b :title "Switch Window" :action "buffers:switch-to-window"}
+        {:key :d :title "Close Window" :action "windows:close-window"}
+        {:key :n :title "Next App Window" :action "buffers:next-window" :repeatable true}
+        {:key :p :title "Previous App Window" :action "buffers:previous-window" :repeatable true}
+        {:key :tab :title "Last Window" :action "buffers:last-window"}])
+
+(local quit-bindings
+       [{:key :q :title "Quit App" :action "quit:quit-app"}
+        {:mods [:shift] :key :q :title "Force Quit App" :action "quit:force-quit-app"}
+        {:key :r :title "Relaunch App" :action "quit:relaunch-app"}
+        {:key :f :title "Close Window" :action "windows:close-window"}])
+
+(local embark-bindings
+       [{:key :e :title "Act on Selection" :action "embark:act"}])
+
+(local toggle-bindings
+       [{:mods [:shift] :key :f :title "Full Screen" :action "windows:toggle-fullscreen"}
+        {:key :t :title "Dark Mode" :action "toggles:toggle-dark-mode"}
+        {:key :d :title "Dock Hiding" :action "toggles:toggle-dock-autohide"}
+        {:key :m :title "Menu Bar Hiding" :action "toggles:toggle-menu-bar-autohide"}
+        {:key :h :title "Hidden Files" :action "toggles:toggle-hidden-files"}
+        {:key :n :title "Do Not Disturb" :action "toggles:toggle-do-not-disturb"}
+        {:key :a :title "Keep Awake" :action "toggles:toggle-keep-awake"}
+        {:key :v :title "Mute" :action "toggles:toggle-mute"}
+        {:key :w :title "Wi-Fi" :action "toggles:toggle-wifi"}
+        {:key :b :title "Bluetooth" :action "toggles:toggle-bluetooth"}])
+
+(local space-bindings
+       [{:key :t :title "Switch Space" :action "spaces:list-spaces"}
+        {:key :tab :title "Last Space" :action "spaces:last-space"}
+        {:key :h :title "Space Left" :action "spaces:space-left" :repeatable true}
+        {:key :l :title "Space Right" :action "spaces:space-right" :repeatable true}
+        {:mods [:shift] :key :n :title "New Desktop" :action "spaces:new-space"}
+        {:key :d :title "Close Desktop" :action "spaces:close-space"}
+        {:key :1 :title "Desktop 1" :action "spaces:goto-desktop-1"}
+        {:key :2 :title "Desktop 2" :action "spaces:goto-desktop-2"}
+        {:key :3 :title "Desktop 3" :action "spaces:goto-desktop-3"}
+        {:key :4 :title "Desktop 4" :action "spaces:goto-desktop-4"}
+        {:key :5 :title "Desktop 5" :action "spaces:goto-desktop-5"}
+        {:key :6 :title "Desktop 6" :action "spaces:goto-desktop-6"}
+        {:key :7 :title "Desktop 7" :action "spaces:goto-desktop-7"}
+        {:key :8 :title "Desktop 8" :action "spaces:goto-desktop-8"}
+        {:key :9 :title "Desktop 9" :action "spaces:goto-desktop-9"}])
+
+(local system-bindings
+       [{:key :i :title "System Info" :action "sysinfo:info"}
+        {:key :c :title "World Clock" :action "sysinfo:world-clock"}
+        {:key :p :title :Processes :action "sysinfo:processes"}])
+
+(local layout-bindings
+       [{:key :s :title "Save Layout" :action "layouts:save"}
+        {:key :r :title "Restore Layout" :action "layouts:restore"}
+        {:key :d :title "Delete Layout" :action "layouts:delete"}
+        {:mods [:shift] :key :r :title "Revert Layout" :action "layouts:revert"}])
+
 (local menu-items
        [{:key "'" :title :Hammerspoon :action hs.toggleConsole}
         {:key :r :title :Relaunch :action hs.relaunch}
@@ -211,6 +286,7 @@
          :enter "windows:enter-window-menu"
          :exit "windows:exit-window-menu"
          :items window-bindings}
+        {:key :b :title :Buffers :items buffer-bindings}
         {:key :a :title :Apps :items app-bindings}
         {:key :p :title :Media :items media-bindings}
         {:key :m :title :Mode :menu-fn modes.local-leader}
@@ -219,6 +295,15 @@
         {:key :k
          :title "Keyboard Shortcuts"
          :action "system-shortcuts:execute"}
+        {:key :e :title :Embark :items embark-bindings}
+        {:key :q :title :Quit :items quit-bindings}
+        {:mods [:shift] :key :t :title :Toggles :items toggle-bindings}
+        {:key :t :title :Spaces :items space-bindings}
+        {:key "[" :title "Space Left" :action "spaces:space-left" :repeatable true}
+        {:key "]" :title "Space Right" :action "spaces:space-right" :repeatable true}
+        {:mods [:shift] :key ";" :title "Eval Fennel" :action "eval:eval-expression"}
+        {:mods [:shift] :key :a :title :System :items system-bindings}
+        {:mods [:shift] :key :d :title :Layouts :items layout-bindings}
         {:key :h :title :Help :items help-bindings}])
 
 (local agnostic-keys [{:mods [:cmd]

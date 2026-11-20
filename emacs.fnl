@@ -24,15 +24,19 @@
       " nil t)) " form ")"))
 
 (fn emacsclient
-  [args]
-  "Run emacsclient with ARGS (no shell involved); log failures to the console."
+  [args on-exit]
+  "Run emacsclient with ARGS (no shell involved); log failures to the console.
+  ON-EXIT, if given, is called with the exit code, stdout and stderr (code nil
+  without emacsclient)."
   (if (not emacsclient-path)
-      (log.w "emacsclient not found; install Emacs or add it to PATH")
+      (do (log.w "emacsclient not found; install Emacs or add it to PATH")
+          (when on-exit (on-exit nil "" "")))
       (: (hs.task.new emacsclient-path
                       (fn [code stdout stderr]
                         (when (not= code 0)
                           (log.w (.. "emacsclient failed (" code "): " stderr
                                      stdout)))
+                        (when on-exit (on-exit code stdout stderr))
                         true)
                       args)
          :start)))

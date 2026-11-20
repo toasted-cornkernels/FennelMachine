@@ -47,17 +47,23 @@ echo line such as `SPC w-` underneath.
 (fn has? [list x]
   (hs.fnutils.contains (or list []) x))
 
+(local shifted-symbols {";" ":" "/" "?" "'" "\"" "," "<" "." ">" "[" "{" "]" "}"
+                        "=" "+" "-" "_" "`" "~" "\\" "|" :1 "!" :2 "@" :3 "#"
+                        :4 "$" :5 "%" :6 "^" :7 "&" :8 "*" :9 "(" :0 ")"})
+
 (fn emacs-key
   [mods key]
-  "Render a binding the way Emacs does: s-h for Cmd-h, H for Shift-h, SPC."
+  "Render a binding the way Emacs does: s-h for Cmd-h, H for Shift-h, : for
+  Shift-; (US layout), SPC."
   (let [key (tostring key)
         base (or (. named-keys (string.lower key)) key)
-        shifted-letter? (and (has? mods :shift) (base:match "^%a$"))
-        base (if shifted-letter? (base:upper) base)]
+        shifted (when (has? mods :shift)
+                  (if (base:match "^%a$") (base:upper) (. shifted-symbols base)))
+        base (or shifted base)]
     (.. (table.concat
          (icollect [_ [mod prefix] (ipairs mod-prefixes)]
            (when (and (has? mods mod)
-                      (not (and shifted-letter? (= mod :shift))))
+                      (not (and shifted (= mod :shift))))
              prefix)))
         base)))
 

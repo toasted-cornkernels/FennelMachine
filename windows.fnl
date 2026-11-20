@@ -8,6 +8,7 @@
         : split} (require :lib.functional))
 
 (local {: global-filter} (require :lib.utils))
+(local minibuffer (require :lib.minibuffer))
 (local {: atom : deref : swap! : reset!} (require :lib.atom))
 
 (require-macros :lib.advice.macros)
@@ -15,37 +16,68 @@
 ;; History ==========================================
 ;; ==================================================
 
-(global history {})
+;; Like winner-mode: each step holds the frames some windows had before a
+;; change, so commands that move several windows undo in one step.
+(local history {:undo [] :redo []})
+(local history-limit 50)
 
-(fn history.push [self]
-  "Append current window frame geometry to history. self is the global history table instance"
-  (let [win (hs.window.focusedWindow)
-        id (when win (win:id))
-        tbl (. self id)]
-    (when win
-      (if (= (type tbl) :nil)
-          (tset self id [(win:frame)])
-          (let [last-el (. tbl (length tbl))]
-            (when (not= last-el (win:frame))
-              (table.insert tbl (win:frame))))))))
+(fn snapshot [wins]
+  (icollect [_ w (ipairs wins)]
+    (when (w:id) {:id (w:id) :frame (w:frame)})))
+
+(fn same-step? [a b]
+  (and a b (= (length a) (length b))
+       (accumulate [same true i e (ipairs a)]
+         (and same (= e.id (. b i :id)) (= e.frame (. b i :frame))))))
+
+(fn history.push [self wins]
+  "Record the frames of WINS (the focused window by default) before a change."
+  (let [step (snapshot (or wins [(hs.window.focusedWindow)]))]
+    (when (and (< 0 (length step))
+               (not (same-step? step (. self.undo (length self.undo)))))
+      (table.insert self.undo step)
+      (when (< history-limit (length self.undo))
+        (table.remove self.undo 1)))
+    (set self.redo [])))
+
+(fn restore-step [from to]
+  "Move the last step of FROM back into place, recording the frames it
+  replaces in TO. Returns false when FROM is empty."
+  (let [step (table.remove from)]
+    (if (not step)
+        false
+        (let [back []]
+          (each [_ e (ipairs step)]
+            (let [w (hs.window.get e.id)]
+              (when w
+                (table.insert back {:id e.id :frame (w:frame)})
+                (w:setFrame e.frame))))
+          (table.insert to back)
+          true))))
 
 (fn history.pop [self]
-  "Go back to previous window frame geometry in history. self is the history table instance"
-  (let [win (hs.window.focusedWindow)
-        id (when win (win:id))
-        tbl (. self id)]
-    (when (and win tbl)
-      (let [el (table.remove tbl)
-            num-of-undos (length tbl)]
-        (if el
-            (do
-              (win:setFrame el)
-              (when (< 0 num-of-undos)
-                (alert (.. num-of-undos " undo steps available"))))
-            (alert "nothing to undo"))))))
+  "Undo the last window change."
+  (if (restore-step self.undo self.redo)
+      (minibuffer.message (.. "Undo" (if (< 0 (length self.undo))
+                                         (.. " (" (length self.undo) " more)")
+                                         "")))
+      (minibuffer.message "Nothing to undo")))
+
+(fn history.unpop [self]
+  "Redo the last undone window change."
+  (if (restore-step self.redo self.undo)
+      (minibuffer.message "Redo")
+      (minibuffer.message "Nothing to redo")))
+
+(fn remember-frames [wins]
+  "Record the frames of WINS so that the next change to them can be undone."
+  (: history :push wins))
 
 (fn undo []
   (: history :pop))
+
+(fn redo []
+  (: history :unpop))
 
 ;; My Addition!! ====================================
 ;; ==================================================
@@ -200,27 +232,113 @@
 ;; ==================================================
 
 (fn jump-window [arrow]
-  "Navigate to the window nearest the current active window. For
-  instance if you open up emacs to the left of a web browser, activate
-  emacs, then run (jump-window :l) hammerspoon will move active focus
-  to the browser.  Takes an arrow like :h :j :k :l to support vim key
-  bindings.  Performs side effects, Returns nil"
+  "Focus the nearest window in the direction of ARROW (:h :j :k :l), like
+  Emacs' windmove. Prefers the frontmost of the candidates."
   (let [dir {:h :West :j :South :k :North :l :East}
-        space (. (hs.window.focusedWindow) :filter :defaultCurrentSpace)
-        fn-name (.. :focusWindow (. dir arrow))]
-    (: space fn-name nil true true)))
+        names {:h "left" :j "below" :k "above" :l "right"}
+        win (hs.window.focusedWindow)]
+    (when (not (and win (: win (.. :focusWindow (. dir arrow)) nil true true)))
+      (minibuffer.message (.. "No window " (. names arrow))))))
 
 (fn jump-window-left []
   (jump-window :h))
 
-(fn jump-window-above []
+(fn jump-window-below []
   (jump-window :j))
 
-(fn jump-window-below []
+(fn jump-window-above []
   (jump-window :k))
 
 (fn jump-window-right []
   (jump-window :l))
+
+;; Emacs-style window commands =====================
+;; ==================================================
+
+(fn screen-windows [screen]
+  "The visible standard windows on SCREEN in the current Space, ordered left
+  to right, then top to bottom."
+  (let [wins (icollect [_ w (ipairs (hs.window.orderedWindows))]
+               (when (and (w:isStandard) (w:isVisible)
+                          (= (: (w:screen) :id) (screen:id)))
+                 w))]
+    (table.sort wins #(let [a ($1:frame) b ($2:frame)]
+                        (if (= a.x b.x) (< a.y b.y) (< a.x b.x))))
+    wins))
+
+(fn current-screen []
+  (let [win (hs.window.focusedWindow)]
+    (or (and win (win:screen)) (hs.screen.mainScreen))))
+
+(fn close-window []
+  "Close the focused window, like delete-window."
+  (let [win (hs.window.focusedWindow)]
+    (if (not win) (minibuffer.message "No window to close")
+        (not (win:close)) (minibuffer.message (.. "Can't close " (win:title))))))
+
+(fn toggle-fullscreen []
+  (let [win (hs.window.focusedWindow)]
+    (if win (win:toggleFullScreen) (minibuffer.message "No window"))))
+
+(fn tile-windows []
+  "Give the visible windows of the focused screen equal space, like
+  balance-windows: side by side up to three, else in a grid."
+  (let [screen (current-screen)
+        wins (screen-windows screen)
+        n (length wins)]
+    (if (= n 0)
+        (minibuffer.message "No windows to tile")
+        (let [sf (screen:frame)
+              cols (if (<= n 3) n (math.ceil (math.sqrt n)))
+              rows (math.ceil (/ n cols))
+              h (/ sf.h rows)]
+          (: history :push wins)
+          (each [i w (ipairs wins)]
+            (let [row (// (- i 1) cols)
+                  col (% (- i 1) cols)
+                  ;; The last row spreads its windows over the whole width.
+                  in-row (if (= row (- rows 1)) (- n (* row cols)) cols)
+                  width (/ sf.w in-row)]
+              (w:setFrame {:x (+ sf.x (* col width)) :y (+ sf.y (* row h))
+                           :w width :h h})))))))
+
+(fn split-with-last [side-by-side?]
+  "Put the focused window and the one focused before it on the focused
+  window's screen, side by side or one above the other."
+  (let [wins (: hs.window.filter.defaultCurrentSpace :getWindows
+                hs.window.filter.sortByFocusedLast)
+        a (hs.window.focusedWindow)
+        b (accumulate [found nil _ w (ipairs wins)]
+            (or found (when (and a (not= (w:id) (a:id)) (w:isStandard)) w)))]
+    (if (not (and a b))
+        (minibuffer.message "Need two windows to split")
+        (let [sf (: (a:screen) :frame)]
+          (: history :push [a b])
+          (if side-by-side?
+              (do (a:setFrame {:x sf.x :y sf.y :w (/ sf.w 2) :h sf.h})
+                  (b:setFrame {:x (+ sf.x (/ sf.w 2)) :y sf.y :w (/ sf.w 2) :h sf.h}))
+              (do (a:setFrame {:x sf.x :y sf.y :w sf.w :h (/ sf.h 2)})
+                  (b:setFrame {:x sf.x :y (+ sf.y (/ sf.h 2)) :w sf.w :h (/ sf.h 2)})))
+          (a:focus)))))
+
+(fn split-side-by-side [] (split-with-last true))
+(fn split-stacked [] (split-with-last false))
+
+(fn rotate-windows [step]
+  "Move each visible window of the focused screen into the place of the next
+  one (STEP 1) or the previous one (STEP -1), like evil-window-rotate."
+  (let [wins (screen-windows (current-screen))
+        n (length wins)
+        frames (icollect [_ w (ipairs wins)] (w:frame))]
+    (if (< n 2)
+        (minibuffer.message "Need two windows to rotate")
+        (do
+          (: history :push wins)
+          (each [i w (ipairs wins)]
+            (w:setFrame (. frames (+ 1 (% (+ (- i 1) step n) n)))))))))
+
+(fn rotate-windows-down [] (rotate-windows 1))
+(fn rotate-windows-up [] (rotate-windows -1))
 
 (fn allowed-app? [window]
   ((: window :isStandard) true false))
@@ -477,6 +595,15 @@
                 : init
                 : jump
                 : jump-to-last-window
+                : close-window
+                : toggle-fullscreen
+                : tile-windows
+                : split-side-by-side
+                : split-stacked
+                : rotate-windows-down
+                : rotate-windows-up
+                : redo
+                : remember-frames
                 : jump-window-above
                 : jump-window-below
                 : jump-window-left

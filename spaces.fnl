@@ -1,0 +1,171 @@
+"Spaces as tabs, like tab-bar-mode: switch by number, step left and right,
+return to the last Space, pick one from a list, add and close desktops"
+
+(local minibuffer (require :lib.minibuffer))
+(local system-shortcuts (require :system-shortcuts))
+
+;; Symbolic hotkeys of Keyboard Shortcuts › Mission Control.
+(local move-left-hotkey 79)
+(local move-right-hotkey 81)
+(local desktop-1-hotkey 118)
+(local max-desktop-hotkeys 16)
+
+(var current nil)
+(var previous nil)
+(var watcher nil)
+;; Kept here so that pending timers aren't garbage collected.
+(var timer nil)
+
+(fn screen-spaces [screen]
+  (or (hs.spaces.spacesForScreen (or screen (hs.screen.mainScreen))) []))
+
+(fn desktops [screen]
+  "The user desktops of SCREEN, numbered as Mission Control numbers them."
+  (icollect [_ s (ipairs (screen-spaces screen))]
+    (when (= (hs.spaces.spaceType s) :user) s)))
+
+(fn index-of [list x]
+  (accumulate [found nil i y (ipairs list)]
+    (or found (when (= x y) i))))
+
+(fn screen-of [space]
+  (accumulate [found nil _ screen (ipairs (hs.screen.allScreens))]
+    (or found (when (index-of (screen-spaces screen) space) screen))))
+
+(fn goto-space [space]
+  "Show SPACE: a desktop through its Switch to Desktop shortcut, which slides
+  over like the trackpad gesture, anything else through Mission Control."
+  (let [n (index-of (desktops (screen-of space)) space)]
+    (if (and n (<= n max-desktop-hotkeys))
+        (system-shortcuts.run (+ desktop-1-hotkey n -1))
+        (hs.spaces.gotoSpace space))))
+
+(fn goto-desktop [n]
+  (let [space (. (desktops) n)]
+    (if space (goto-space space) (minibuffer.message (.. "No desktop " n)))))
+
+(fn space-left [] (system-shortcuts.run move-left-hotkey))
+(fn space-right [] (system-shortcuts.run move-right-hotkey))
+
+(fn last-space []
+  "Go back to the previously shown Space, like tab-recent."
+  (if (and previous (screen-of previous))
+      (goto-space previous)
+      (minibuffer.message "No previous Space")))
+
+(fn windows-by-id []
+  "Every titled window, on any Space; hs.window.get only sees the current one."
+  (collect [_ w (ipairs (: ((. (require :buffers) :init)) :getWindows))]
+    (values (w:id) w)))
+
+(fn space-windows [space by-id]
+  (icollect [_ id (ipairs (or (hs.spaces.windowsForSpace space) []))]
+    (. by-id id)))
+
+(fn space-name [space by-id]
+  (let [n (index-of (desktops (screen-of space)) space)
+        app (-?> (space-windows space by-id) (. 1) (: :application))]
+    (if n (.. "Desktop " n)
+        (.. (if app (.. (app:name) " ") "") "(full screen)"))))
+
+(fn window-names [space by-id]
+  "The apps with windows on SPACE, for annotations."
+  (let [names []
+        seen {}]
+    (each [_ win (ipairs (space-windows space by-id))]
+      (let [name (-?> (win:application) (: :name))]
+        (when (and name (not (. seen name)))
+          (tset seen name true)
+          (table.insert names name))))
+    (table.concat names ", ")))
+
+(fn list-spaces []
+  "Pick a Space from the list of every Space on every screen."
+  (let [focused (hs.spaces.focusedSpace)
+        by-id (windows-by-id)
+        candidates []]
+    (each [_ screen (ipairs (hs.screen.allScreens))]
+      (each [_ space (ipairs (screen-spaces screen))]
+        (table.insert candidates
+                      {:text (.. (space-name space by-id)
+                                 (if (= space focused) " (current)" ""))
+                       :annotation (window-names space by-id)
+                       : space})))
+    (minibuffer.completing-read
+     "Switch to Space: " candidates
+     {:on-accept (fn [c] (when c (goto-space c.space)))})))
+
+(fn new-space []
+  "Add a desktop to the focused screen and show it."
+  (let [screen (hs.screen.mainScreen)
+        (ok err) (hs.spaces.addSpaceToScreen screen false)]
+    (if (not ok)
+        (minibuffer.message (.. "Can't add a desktop: " (tostring err)))
+        (let [all (desktops screen)]
+          (minibuffer.message (.. "Added Desktop " (length all)))
+          ;; The Dock needs a moment before the new desktop can be switched to.
+          (when timer (timer:stop))
+          (set timer (hs.timer.doAfter 0.5 #(goto-space (. all (length all)))))))))
+
+(fn close-space []
+  "Close the current desktop after asking; macOS moves its windows to another
+  desktop. Shows the desktop to its left (or right) first, as a Space can't be
+  removed while shown."
+  (let [space (hs.spaces.focusedSpace)
+        all (desktops)
+        n (index-of all space)]
+    (if (not n) (minibuffer.message "Only desktops can be closed")
+        (= (length all) 1) (minibuffer.message "Can't close the only desktop")
+        (minibuffer.y-or-n-p
+         (.. "Close Desktop " n "?")
+         (fn []
+           (let [target (. all (if (> n 1) (- n 1) (+ n 1)))]
+             (goto-space target)
+             (var waited 0)
+             (when timer (timer:stop))
+             (set timer
+                  (hs.timer.doEvery
+                   0.2
+                   (fn []
+                     (set waited (+ waited 0.2))
+                     (if (= (hs.spaces.focusedSpace) target)
+                         (do
+                           (timer:stop)
+                           ;; Wait for the slide to finish.
+                           (hs.timer.doAfter
+                            0.5
+                            #(let [(ok err) (hs.spaces.removeSpace space false)]
+                               (minibuffer.message
+                                (if ok (.. "Closed Desktop " n)
+                                    (.. "Can't close Desktop " n ": "
+                                        (tostring err)))))))
+                         (>= waited 5)
+                         (do
+                           (timer:stop)
+                           (minibuffer.message "Couldn't leave the desktop"))))))))))))
+
+(fn init []
+  (set current (hs.spaces.focusedSpace))
+  (set watcher (hs.spaces.watcher.new
+                (fn []
+                  (let [space (hs.spaces.focusedSpace)]
+                    (when (not= space current)
+                      (set previous current)
+                      (set current space))))))
+  (watcher:start)
+  watcher)
+
+(local exports
+       {: init
+        : goto-desktop
+        : space-left
+        : space-right
+        : last-space
+        : list-spaces
+        : new-space
+        : close-space})
+
+(for [n 1 9]
+  (tset exports (.. "goto-desktop-" n) #(goto-desktop n)))
+
+exports
