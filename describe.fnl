@@ -10,6 +10,14 @@ Emacs-style help commands, under `Cmd-SPC h`:
   .  describe-element    the accessibility element that has keyboard focus
   p  describe-element-at-pointer   the one under the mouse pointer
   m  describe-mode       the frontmost app's mode keymap
+  f  describe-function   a command, config function or Hammerspoon API item:
+                         its documentation, source and keys
+  a  apropos-command     commands whose name or documentation has some words
+  e  view-echo-area-messages   past echo area messages and errors (*Messages*)
+  =  describe-char       the character after the insertion point, or each one
+                         of the selection: codepoint, Unicode name, UTF-8
+  A  describe-app        the frontmost app: bundle, process, windows, mode
+  W  describe-window     the focused window: frame, screen, Space, state
 
 Short answers go to the echo area, long ones to the help viewer (lib/help.fnl).
 "
@@ -85,7 +93,11 @@ Short answers go to the echo area, long ones to the help viewer (lib/help.fnl).
     (each [k v (pairs hs) &until found]
       (when (= v f) (set found (.. "hs." k))))
     (each [module-name module (pairs package.loaded) &until found]
-      (when (= (type module) :table)
+      ;; Skip internal modules such as hs.libcaffeinate in favour of the public
+      ;; one (hs.caffeinate) that exports the same function.
+      (when (and (= (type module) :table)
+                 (not (module-name:match "^hs%.lib"))
+                 (not (module-name:match "%._")))
         (pcall #(each [k v (pairs module) &until found]
                   (when (and (= v f) (= (type k) :string))
                     (set found (if (= module-name :_G) k
@@ -331,7 +343,7 @@ Short answers go to the echo area, long ones to the help viewer (lib/help.fnl).
     (: tap :start)))
 
 (fn field [label value]
-  [[(pad (.. "  " label) 10) :dim] [(tostring value) :fg]])
+  [[(pad (.. "  " label) 14) :dim] [(tostring value) :fg]])
 
 (fn show-entry [entry ?shadowed]
   "Describe ENTRY in the help viewer, or in the echo area if a line will do."
@@ -615,13 +627,18 @@ Short answers go to the echo area, long ones to the help viewer (lib/help.fnl).
                   :lines (element-lines element)})
       (minibuffer.message (.. "No accessibility element " what))))
 
+(fn focused-element []
+  "The element with keyboard focus. The system-wide query sometimes comes back
+  empty right after an app switch, so ask the frontmost app first."
+  (let [front (hs.application.frontmostApplication)
+        app (and front (hs.axuielement.applicationElement front))]
+    (or (and app (attr app :AXFocusedUIElement))
+        (attr (hs.axuielement.systemWideElement) :AXFocusedUIElement)
+        (and app (attr app :AXFocusedWindow)))))
+
 (fn describe-element []
   "Describe the accessibility element that has keyboard focus."
-  (let [app (hs.axuielement.applicationElement (hs.application.frontmostApplication))]
-    (show-element (or (attr app :AXFocusedUIElement)
-                      (attr (hs.axuielement.systemWideElement) :AXFocusedUIElement)
-                      (attr app :AXFocusedWindow))
-                  "focused")))
+  (show-element (focused-element) "focused"))
 
 (fn describe-element-at-pointer []
   "Describe the accessibility element under the mouse pointer."
@@ -641,12 +658,528 @@ Short answers go to the echo area, long ones to the help viewer (lib/help.fnl).
         (help.show {:title (.. "describe-mode: " (front-name))
                     :lines [description]}))))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; describe-function and apropos-command
+;;
+;; Functions are {:name :kind :fn :doc :source :title :keys} where :kind is
+;; :command (bound to a key), :launcher, :function (exported by one of the
+;; config's modules) or :api (Hammerspoon's reference documentation).
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(fn own-file? [file]
+  (let [dir (.. hs.configdir "/")]
+    (and file (= (file:sub 1 (length dir)) dir))))
+
+(fn module-functions []
+  "Functions exported by the config's own modules, named like actions."
+  (let [acc []]
+    (each [module-name module (pairs package.loaded)]
+      (when (and (= (type module) :table) (= (type module-name) :string)
+                 (not (module-name:match "^hs[%._]")))
+        (pcall #(each [k v (pairs module)]
+                  (when (and (= (type k) :string) (= (type v) :function))
+                    (let [loc (hotkeys.fn-location v)]
+                      (when (and loc (own-file? loc.file))
+                        (table.insert acc {:name (.. module-name ":" k) :kind :function
+                                           :fn v :source loc
+                                           :doc (hotkeys.docstring v)}))))))))
+    (table.sort acc #(< $1.name $2.name))
+    acc))
+
+(fn launcher-commands []
+  (let [(ok items) (pcall #((. (require :launcher) :system-commands)))]
+    (icollect [_ c (ipairs (if ok items []))]
+      {:name c.text :kind :launcher :fn c.run :keywords c.keywords
+       :doc (hotkeys.docstring c.run) :source (hotkeys.fn-location c.run)})))
+
+(fn commands []
+  "Bound commands, launcher commands and the config's functions, merged by name
+  and by function so each appears once with all its keys."
+  (let [by-name {}
+        by-fn {}
+        order []]
+    (fn add [c]
+      (let [known (or (. by-name c.name) (and c.fn (. by-fn c.fn)))]
+        (if known
+            (do (each [_ k (ipairs (or c.keys []))]
+                  (when (not (hs.fnutils.contains known.keys k))
+                    (table.insert known.keys k)))
+              (each [_ field (ipairs [:fn :doc :source :title :keywords])]
+                (when (= nil (. known field))
+                  (tset known field (. c field)))))
+            (let [c (doto c (tset :keys (or c.keys [])))]
+              (tset by-name c.name c)
+              (when c.fn (tset by-fn c.fn c))
+              (table.insert order c)))))
+    (each [_ candidate (ipairs (where-is-candidates []))]
+      (let [e candidate.entry]
+        (when (not= e.layer :system)
+          (add {:name e.name :kind :command :fn e.fn :doc e.doc :source e.source
+                :title (when (not= e.title e.name) e.title)
+                :keys (icollect [_ k (ipairs candidate.keys)] k)}))))
+    (each [_ c (ipairs (launcher-commands))] (add c))
+    (each [_ c (ipairs (module-functions))] (add c))
+    order))
+
+(var api-cache nil)
+
+(fn api-item [path node module?]
+  "An :api function for the hs.doc NODE at PATH. Its text starts with a
+  `Type: signature` line, except for modules."
+  (let [text (tostring node)
+        (api-type signature) (text:match "^(%a+): ([^\n]*)")
+        api-type (if module? :Module (or api-type :Item))
+        name (if (= api-type :Method) (path:gsub "%.([^%.]+)$" ":%1") path)
+        body (if module? text (or (text:match "^[^\n]*\n%s*\n(.*)$") ""))]
+    {: name :kind :api : api-type
+     :module (or (path:match "^(.+)%.[^%.]+$") path)
+     :signature (when (not module?) signature)
+     :desc (first-line (body:match "^%s*(.-)%s*$"))
+     :doc (body:match "^(.-)%s*$")}))
+
+(fn hs-api []
+  "Every module and item of the reference documentation bundled with
+  Hammerspoon (hs.doc), built once: it takes about half a second."
+  (when (not api-cache)
+    (set api-cache [])
+    (let [tree (getmetatable hs.doc)]
+      (fn walk [path node]
+        (each [_ name (ipairs (or (tree._children path) []))]
+          (let [full (.. path "." name)
+                child (. node name)
+                kids (tree._children full)]
+            (when child
+              (if (and kids (> (length kids) 0))
+                  (do (table.insert api-cache (api-item full child true))
+                    (walk full child))
+                  (table.insert api-cache (api-item full child false)))))))
+      (each [_ root (ipairs [:hs :spoon])]
+        (let [(ok node) (pcall #(. hs.doc root))]
+          (when (and ok node) (pcall walk root node)))))
+    (table.sort api-cache #(< $1.name $2.name)))
+  api-cache)
+
+(fn api-function [item]
+  "The Lua value ITEM documents, if it is a plain function reachable from _G."
+  (when (not= item.api-type :Method)
+    (var value _G)
+    (each [part (item.name:gmatch "[^%.]+") &until (not= (type value) :table)]
+      (set value (let [(ok v) (pcall #(. value part))] (when ok v))))
+    (when (= (type value) :function) value)))
+
+(fn kind-phrase [c]
+  (case c.kind
+    :command "a command"
+    :launcher "a launcher command"
+    :function (.. "a function in " (or (c.name:match "^(.-):") "the config"))
+    :api (if (= c.api-type :Module) "a Hammerspoon module"
+             (.. "a Hammerspoon " (c.api-type:lower) " in " c.module))
+    _ "a function"))
+
+(fn describe-function-lines [c ?bound]
+  (let [keys (or (and (> (length (or c.keys [])) 0) c.keys)
+                 (and ?bound ?bound.keys))
+        lines [[[c.name :heading] [(.. " is " (kind-phrase c) ".") :fg]] ""]]
+    (when c.signature
+      (table.insert lines [[(.. "  " c.signature) :key]])
+      (table.insert lines ""))
+    (when c.title (table.insert lines (field "Title" c.title)))
+    (table.insert lines (field "Keys" (if (and keys (> (length keys) 0))
+                                          (table.concat keys ", ")
+                                          "not on any key")))
+    (when c.source
+      (table.insert lines (field "Source" (location-string c.source))))
+    (let [doc (or c.doc (and ?bound ?bound.doc))]
+      (table.insert lines "")
+      (if doc
+          (each [l (string.gmatch (.. doc "\n") "(.-)\n")]
+            (table.insert lines (.. "  " l)))
+          (table.insert lines [["  Not documented." :dim]])))
+    lines))
+
+(fn show-function [c all]
+  (let [bound (when (= c.kind :api)
+                (let [f (api-function c)]
+                  (when f (hs.fnutils.find all #(= $1.fn f)))))
+        ;; A command that is a named function, e.g. Lock Screen runs
+        ;; hs.caffeinate.lockScreen: describe that too.
+        runs (when (and c.fn (not= c.kind :api))
+               (let [name (function-name c.fn)]
+                 (when (and name (not= name c.name)) name)))
+        api (when runs (hs.fnutils.find (hs-api) #(= $1.name runs)))
+        lines (describe-function-lines
+               (if api
+                   (setmetatable {:signature (or c.signature api.signature)
+                                  :doc (or c.doc api.doc)}
+                                 {:__index c})
+                   c)
+               bound)]
+    (when runs
+      (table.insert lines 3 (field "Runs" runs)))
+    (help.show {:title (.. "describe-function: " c.name)
+                : lines
+                :source c.source})))
+
+(fn function-annotation [c]
+  (if (> (length (or c.keys [])) 0)
+      (table.concat c.keys ", ")
+      (one-line (or (first-line c.doc) c.desc c.title
+                    (case c.kind :launcher "launcher command" _ c.kind))
+                70)))
+
+(fn describe-function []
+  "Read a command, function or Hammerspoon API name and describe it."
+  (help.close)
+  (let [all (commands)]
+    (minibuffer.completing-read
+     "Describe function: " nil
+     {:on-accept (fn [candidate input]
+                   (if candidate
+                       (show-function candidate.command all)
+                       (when (and input (not= input ""))
+                         (minibuffer.message (.. "No function named " input)))))})
+    (hs.timer.doAfter
+     0.01
+     #(when (minibuffer.active?)
+        (let [acc (icollect [_ c (ipairs all)]
+                    {:text c.name
+                     :keywords (.. (or c.title "") " " (or c.keywords ""))
+                     :annotation (function-annotation c)
+                     :command c})]
+          (let [by-name (collect [_ c (ipairs all)] c.name c)]
+            (each [_ c (ipairs (hs-api))]
+              (let [command (. by-name c.name)]
+                (if command
+                    ;; A bound API function, e.g. hs.toggleConsole: one entry
+                    ;; with both its keys and its reference documentation.
+                    (do (set command.signature c.signature)
+                      (when (not command.doc) (set command.doc c.doc)))
+                    (table.insert acc {:text c.name
+                                       :annotation (.. c.api-type "  "
+                                                       (one-line (or c.desc "") 60))
+                                       :command c})))))
+          (minibuffer.set-collection acc))))))
+
+(fn apropos-matches [words]
+  (icollect [_ c (ipairs (commands))]
+    (let [haystack (: (table.concat [c.name (or c.title "") (or c.doc "")
+                                     (or c.keywords "")]
+                                    " ")
+                      :lower)]
+      (when (accumulate [all true _ w (ipairs words)]
+              (and all (not= nil (haystack:find w 1 true))))
+        c))))
+
+(fn apropos [input]
+  (let [lower (input:lower)
+        words (icollect [w (lower:gmatch "%S+")] w)
+        matches (apropos-matches words)]
+    (table.sort matches #(< $1.name $2.name))
+    (if (= (length matches) 0)
+        (minibuffer.message (.. "No command matches “" input "”"))
+        (let [lines []]
+          (each [_ c (ipairs matches)]
+            (table.insert lines [[c.name :heading]
+                                 [(if (> (length c.keys) 0)
+                                      (.. "  " (table.concat c.keys ", "))
+                                      "")
+                                  :key]])
+            (table.insert lines [[(.. "  " (or (first-line c.doc) c.title
+                                               (.. (kind-phrase c) ", not documented")))
+                                  (if (or c.doc c.title) :fg :dim)]]))
+          (help.show {:title (.. "apropos-command: " input " (" (length matches) ")")
+                      : lines})))))
+
+(fn apropos-command []
+  "Read words and list the commands whose name, title or documentation
+  contains all of them."
+  (help.close)
+  (minibuffer.completing-read
+   "Apropos command (words): " []
+   {:on-accept (fn [_ input]
+                 (if (and input (input:find "%S"))
+                     (apropos input)
+                     (minibuffer.message "Quit")))}))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; view-echo-area-messages
+;;
+;; minibuffer.message prints every message to the console, which therefore
+;; already is *Messages*; this reads the messages (and errors) back from it.
+;; Like the console, it starts over when the config reloads.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(local error-face "#f7768e")
+(local max-messages 500)
+
+(fn error-line? [text]
+  (or (text:find "ERROR") (text:find "[Ee]rror:") (text:find "stack traceback")))
+
+(fn messages []
+  "{:time :text :error?} for the messages and errors in the console."
+  (let [acc []]
+    (var last nil)
+    (each [line (string.gmatch (.. (or (hs.console.getConsole) "") "\n") "(.-)\n")]
+      (let [(time rest) (line:match "^%d+%-%d+%-%d+ (%d+:%d+:%d+): (.*)$")]
+        (if time
+            (let [message (rest:match "^message: (.*)$")]
+              (set last (if message {: time :text message}
+                            (error-line? rest) {: time
+                                                :text (-> rest
+                                                          (: :gsub "^%s*%d+:%d+:%d+%s+" "")
+                                                          (: :match "^%s*(.-)$"))
+                                                :error? true}
+                            nil))
+              (when last (table.insert acc last)))
+            (when (and last (line:find "%S"))
+              (table.insert acc {:time "" :text line :error? last.error?})))))
+    (if (> (length acc) max-messages)
+        (fcollect [i (- (length acc) max-messages -1) (length acc)] (. acc i))
+        acc)))
+
+(fn view-echo-area-messages []
+  "Show the echo area's past messages, and errors, like Emacs' *Messages*."
+  (let [all (messages)]
+    (if (= (length all) 0)
+        (minibuffer.message "No messages yet")
+        (do
+          (minibuffer.clear)
+          (help.show {:title (.. "*Messages* (" (length all) ")")
+                      :at-end true
+                      :lines (icollect [_ m (ipairs all)]
+                               [[(pad m.time 8) :dim] ["  " :fg]
+                                [m.text (if m.error? error-face :fg)]])})))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; describe-char
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(local max-chars 300)
+
+(fn utf16-offset->index [s units]
+  "The byte index in S of the character UNITS UTF-16 code units in."
+  (var u 0)
+  (var found nil)
+  (let [(ok) (pcall #(each [i c (utf8.codes s) &until found]
+                       (if (>= u units)
+                           (set found i)
+                           (set u (+ u (if (>= c 0x10000) 2 1))))))]
+    (when ok found)))
+
+(fn text-at-point []
+  "The focused element's selected text, or else the character after its
+  insertion point, like Emacs' char-after. Also returns :selection or :point."
+  (let [element (focused-element)
+        selected (and element (attr element :AXSelectedText))]
+    (if (and (= (type selected) :string) (not= selected ""))
+        (values selected :selection)
+        (let [range (and element (attr element :AXSelectedTextRange))
+              value (and element (attr element :AXValue))
+              location (and (= (type range) :table) (or range.location range.loc))
+              i (and location (= (type value) :string)
+                     (utf16-offset->index value location))]
+          (when i
+            (values (value:sub i (- (or (utf8.offset value 2 i) (+ (length value) 1)) 1))
+                    :point))))))
+
+(fn unicode-names [codepoints]
+  "Unicode names of CODEPOINTS, from ICU's Any-Name transform."
+  (let [js (.. "ObjC.import('Foundation');"
+               "ObjC.unwrap($.NSString.stringWithString(String.fromCodePoint("
+               (table.concat codepoints ",")
+               ")).stringByApplyingTransformReverse('Any-Name', false))")
+        (ok result) (hs.osascript.javascript js)
+        names (if (and ok (= (type result) :string))
+                  (icollect [name (result:gmatch "\\N{(.-)}")] name)
+                  [])]
+    (if (= (length names) (length codepoints)) names [])))
+
+(fn shown-char [cp]
+  "How to show codepoint CP: control characters as ^X, combining marks on ◌."
+  (if (< cp 32) (.. "^" (utf8.char (+ cp 64)))
+      (= cp 127) "^?"
+      (or (<= 0x0300 cp 0x036F) (<= 0x20D0 cp 0x20FF)) (.. "◌" (utf8.char cp))
+      (utf8.char cp)))
+
+(fn char-info [cp name]
+  {:char (shown-char cp)
+   :code (string.format "U+%04X" cp)
+   :name (or name "?")
+   :utf8 (table.concat (icollect [_ b (ipairs [(string.byte (utf8.char cp) 1 -1)])]
+                         (string.format "%02X" b))
+                       " ")
+   :decimal cp})
+
+(fn describe-char []
+  "Describe the character after the insertion point, or each character of the
+  selection: its codepoint, Unicode name and UTF-8 bytes."
+  (let [(text where) (text-at-point)]
+    (if (not text)
+        (minibuffer.message (.. "No text at point in " (front-name)))
+        (let [codepoints (let [(ok cps) (pcall #(icollect [_ c (utf8.codes text)] c))]
+                           (if ok cps []))
+              shown (fcollect [i 1 (math.min max-chars (length codepoints))]
+                      (. codepoints i))
+              names (unicode-names shown)
+              infos (icollect [i cp (ipairs shown)] (char-info cp (. names i)))]
+          (if (= (length infos) 0)
+              (minibuffer.message "Not valid UTF-8")
+              (and (= (length infos) 1) (= where :point))
+              (let [c (. infos 1)]
+                (minibuffer.message
+                 (.. "Char: " c.char "  " c.code "  " c.name "  (" c.decimal
+                     ", UTF-8 " c.utf8 ")")
+                 8))
+              (let [lines [(.. (length codepoints) " characters, " (length text)
+                               " bytes in UTF-8"
+                               (if (> (length codepoints) max-chars)
+                                   (.. "; the first " max-chars " are shown")
+                                   ""))
+                           ""]]
+                (each [_ c (ipairs infos)]
+                  (table.insert lines [[(pad (.. "  " c.char) 6) :fg]
+                                       [(pad c.code 10) :key]
+                                       [(pad c.name 44) :fg]
+                                       [c.utf8 :dim]]))
+                (help.show {:title (.. "describe-char: "
+                                       (if (= where :selection) "selection" "point"))
+                            : lines})))))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; describe-app and describe-window
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(fn yes-no [x] (if x "yes" "no"))
+
+(fn window-flags [win]
+  (let [flags (icollect [_ [f label] (ipairs [[:isMinimized "minimized"]
+                                               [:isFullScreen "full screen"]
+                                               [:isStandard nil]])]
+                (let [(ok v) (pcall #(: win f))]
+                  (if (= f :isStandard)
+                      (when (and ok (not v)) "not standard")
+                      (when (and ok v) label))))]
+    (if (> (length flags) 0) (.. "  (" (table.concat flags ", ") ")") "")))
+
+(fn describe-app []
+  "Describe the frontmost app: its bundle, process, windows, mode and keys."
+  (let [app (hs.application.frontmostApplication)]
+    (if (not app)
+        (minibuffer.message "No frontmost app")
+        (let [name (: app :name)
+              path (: app :path)
+              bundle-id (: app :bundleID)
+              info (or (and path (hs.application.infoForBundlePath path)) {})
+              mode (hs.fnutils.find (modes.all-modes)
+                                    #(hs.fnutils.contains $1.bundle-ids bundle-id))
+              windows (or (: app :allWindows) [])
+              focused (: app :focusedWindow)
+              lines [[[name :heading]
+                      [(.. "  " (or info.CFBundleShortVersionString "")
+                           (if info.CFBundleVersion (.. " (" info.CFBundleVersion ")") ""))
+                       :dim]]
+                     ""
+                     (field "Bundle ID" (tostring bundle-id))
+                     (field "Path" (if path (short-path path) "?"))
+                     (field "PID" (: app :pid))
+                     (field "Kind" (case (: app :kind)
+                                     1 "regular (in the Dock)"
+                                     0 "accessory (no Dock icon)"
+                                     _ "background"))
+                     (field "Hidden" (yes-no (: app :isHidden)))
+                     (field "Mode" (if mode
+                                       (.. mode.title "  (" (leader-chord) " m)")
+                                       "none"))
+                     (field "App keys" (.. (length (app-entries)) " Hammerspoon keys"))]]
+          (table.insert lines "")
+          (table.insert lines [[(.. "Windows (" (length windows) ")") :heading]])
+          (each [_ win (ipairs windows)]
+            (table.insert lines
+                          [[(if (= win focused) "* " "  ") :key]
+                           [(let [t (: win :title)]
+                              (if (and t (not= t "")) t "(untitled)"))
+                            :fg]
+                           [(window-flags win) :dim]]))
+          (minibuffer.message (.. "Reading " name "'s menus…") read-seconds)
+          (with-menu-entries
+           (fn [menus]
+             (table.insert lines "")
+             (table.insert lines (field "Menu keys"
+                                        (.. (length menus) " (" (leader-chord)
+                                            " h b lists them)")))
+             (minibuffer.clear)
+             (help.show {:title (.. "describe-app: " name) : lines})))))))
+
+(fn describe-window []
+  "Describe the focused window: its frame, screen, Space and state."
+  (let [win (hs.window.focusedWindow)]
+    (if (not win)
+        (minibuffer.message (.. "No focused window in " (front-name)))
+        (let [app (: win :application)
+              frame (: win :frame)
+              screen (: win :screen)
+              (spaces-ok spaces) (pcall #(hs.spaces.windowSpaces win))
+              (screen-spaces-ok screen-spaces) (pcall #(hs.spaces.spacesForScreen screen))
+              space-text (if (and spaces-ok spaces (> (length spaces) 0))
+                             (table.concat
+                              (icollect [_ id (ipairs spaces)]
+                                (let [index (and screen-spaces-ok screen-spaces
+                                                 (hs.fnutils.indexOf screen-spaces id))]
+                                  (if index
+                                      (.. "Desktop " index " of " (length screen-spaces)
+                                          " (id " id ")")
+                                      (.. "id " id))))
+                              ", ")
+                             "?")
+              title (: win :title)
+              element (hs.axuielement.windowElement win)
+              (tabs-ok tabs) (pcall #(: win :tabCount))
+              lines [[[(if (and title (not= title "")) title "(untitled)") :heading]]
+                     ""
+                     (field "App" (if app (.. (: app :name) " ("
+                                             (tostring (: app :bundleID)) ")")
+                                      "?"))
+                     (field "ID" (tostring (: win :id)))
+                     (field "Role" (.. (tostring (: win :role)) " / "
+                                       (tostring (: win :subrole))))
+                     (field "Frame" (format-value frame))
+                     (field "Screen" (if screen
+                                         (.. (: screen :name) " ("
+                                             (format-value (: screen :frame)) ")")
+                                         "?"))
+                     (field "Space" space-text)
+                     (field "Standard" (yes-no (: win :isStandard)))
+                     (field "Visible" (yes-no (: win :isVisible)))
+                     (field "Minimized" (yes-no (: win :isMinimized)))
+                     (field "Full screen" (yes-no (: win :isFullScreen)))]]
+          (when (and tabs-ok tabs (> tabs 0))
+            (table.insert lines (field "Tabs" tabs)))
+          (when element
+            (let [document (attr element :AXDocument)]
+              (when (and (= (type document) :string) (not= document ""))
+                (table.insert lines (field "Document" (one-line document 90))))))
+          (help.show {:title (.. "describe-window: " (one-line (or title "") 60))
+                      : lines})))))
+
 {: describe-key
  : describe-bindings
  : where-is
  : describe-element
  : describe-element-at-pointer
  : describe-mode
+ : describe-function
+ : apropos-command
+ : view-echo-area-messages
+ : describe-char
+ : describe-app
+ : describe-window
  : summary
  : hammerspoon-entries
- : with-menu-entries}
+ : with-menu-entries
+ : commands
+ : hs-api
+ : messages}

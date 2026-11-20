@@ -499,6 +499,7 @@ The items you pick most often move to the top.
                        (minibuffer.set-collection (collection)))))
 
 {: show
+ : system-commands
  : collection
  : calculate
  : url-of

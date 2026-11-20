@@ -174,7 +174,19 @@
         {:key :p
          :title "Element at Pointer"
          :action "describe:describe-element-at-pointer"}
-        {:key :m :title "Describe Mode" :action "describe:describe-mode"}])
+        {:key :m :title "Describe Mode" :action "describe:describe-mode"}
+        {:key :f :title "Describe Function" :action "describe:describe-function"}
+        {:key :a :title "Apropos Command" :action "describe:apropos-command"}
+        {:key :e :title "Messages" :action "describe:view-echo-area-messages"}
+        {:key "=" :title "Describe Char" :action "describe:describe-char"}
+        {:mods [:shift]
+         :key :a
+         :title "Describe App"
+         :action "describe:describe-app"}
+        {:mods [:shift]
+         :key :w
+         :title "Describe Window"
+         :action "describe:describe-window"}])
 
 ;; Clipboard history (clipboard.fnl).
 (local clipboard-bindings

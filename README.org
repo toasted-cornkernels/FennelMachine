@@ -187,9 +187,21 @@ ones open a less-like help HUD (=lib/help.fnl=).
 | =k= | describe-key       | What the next chord (or leader sequence) runs, and what it shadows |
 | =b= | describe-bindings  | Every binding active in the frontmost app                          |
 | =w= | where-is           | Pick a command in the minibuffer and show its keys                 |
+| =f= | describe-function  | Pick a command or Hammerspoon API function: docs, keys and source  |
+| =a= | apropos-command    | Commands whose name, title or docs contain all the words you type  |
+| =e= | =*Messages*=       | Echo-area messages and errors since the last config reload         |
 | =.= | describe-element   | The focused accessibility element                                  |
 | =p= | element at pointer | The accessibility element under the mouse pointer                  |
+| ~=~ | describe-char      | The character at point, or each character of the selection         |
 | =m= | describe-mode      | The frontmost app's mode keymap                                    |
+| =A= | describe-app       | The frontmost app: bundle, process, mode, windows, key counts      |
+| =W= | describe-window    | The focused window: frame, screen, Space and state                 |
+
+describe-function lists Fennel functions with docstrings, launcher commands and the
+Hammerspoon API (=hs.doc=); =s= in the HUD visits the source. describe-char reads the
+focused text field through accessibility, so it works in native text views and most
+browser fields. =*Messages*= reads the Hammerspoon console, which is cleared on every
+config reload.
 
 Bindings are collected from several layers. When a chord is bound in more than one,
 the first one wins and describe-key lists the rest as shadowed:

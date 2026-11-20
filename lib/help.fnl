@@ -325,8 +325,9 @@ segmented ones with a hanging indent under their second segment.
 
 (fn show [opts]
   "
-  Show help OPTS {:title str :lines [line ...] :source {:file :line}?}, or a
-  plain string, in the viewer. :source enables `s` to visit it in Emacs.
+  Show help OPTS {:title str :lines [line ...] :source {:file :line}?
+  :at-end bool?}, or a plain string, in the viewer. :source enables `s` to
+  visit it in Emacs; :at-end starts at the bottom, like *Messages*.
   "
   (close)
   (let [opts (if (= (type opts) :string) {:lines [opts]} opts)
@@ -352,7 +353,8 @@ segmented ones with a hanging indent under their second segment.
         canvas (doto (hs.canvas.new rect)
                  (: :level hs.canvas.windowLevels.overlay)
                  (: :behavior [:canJoinAllSpaces :stationary]))]
-    (set hud {: canvas : lines : rows : page : cols : w : h :top 1
+    (set hud {: canvas : lines : rows : page : cols : w : h
+              :top (if opts.at-end (math.max 1 (+ (- (length rows) page) 1)) 1)
               :title (or opts.title "Help")
               :source opts.source
               :tap (hs.eventtap.new [hs.eventtap.event.types.keyDown] on-key)})

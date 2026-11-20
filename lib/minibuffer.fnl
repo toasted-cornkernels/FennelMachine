@@ -197,10 +197,13 @@ in any order, anywhere in a candidate.
 
 (fn refilter []
   (let [terms (terms-of session.input)
+        exact (: (session.input:lower) :match "^%s*(.-)%s*$")
         dynamic (dynamic-candidates)
         scored (if dynamic.only []
                    (icollect [i c (ipairs (or session.collection []))]
-                     (let [s (score c terms)]
+                     (let [s (score c terms)
+                           ;; A candidate that is exactly the input goes first.
+                           s (if (and s (= (c.text:lower) exact)) -1 s)]
                        (when s {: c : s : i}))))
         matches (or dynamic.only (icollect [_ c (ipairs (or dynamic.before []))] c))]
     (table.sort scored #(if (= $1.s $2.s) (< $1.i $2.i) (< $1.s $2.s)))
