@@ -452,8 +452,9 @@ their registry id, e.g. =finder.view.list=. The bottom echo line shows the key p
 and keymap, e.g. =SPC m v- finder-mode › view=.
 
 Menu items marked =:repeatable true= (e.g. the =SPC w= move/resize keys) keep the menu
-open and auto-repeat while held, at the system key-repeat rate. The menu closes after
-2 seconds without a repeatable key press.
+open and auto-repeat while held, at the system key-repeat rate, even when they bring
+another app to the front (as =t h= / =t l= do). The menu closes after 2 seconds without
+a repeatable key press.
 
 | Mode            | Keys    | Command                      | Implementation                              |
 |-----------------+---------+------------------------------+---------------------------------------------|

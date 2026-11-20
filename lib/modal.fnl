@@ -374,22 +374,37 @@ switching menus in one place which is then powered by config.fnl.
   Displays updated modal menu if the current menu is different than the previous
   menu otherwise results in no operation. Application mode menus (lib.modes)
   belong to the app they were opened in, so switching apps cancels them.
+  A submenu stays open, so a repeatable key that switched apps (like `t l`
+  onto another app's Space) can be pressed again; only the root menu C-g
+  returns to changes.
   Returns new modal state
   "
   (let [{:config config
+         :history history
          :menu prev-menu} state.context
         app-menu (apps.get-app)
         menu (if (and app-menu (has-some? app-menu.items))
                  app-menu
-                 config)]
+                 config)
+        root (. history 1)]
     (if prev-menu.mode
         (active->idle state)
-        (= menu.key prev-menu.key)
+        (= menu root)
         ; nil transition object means keep all state
         nil
+        (> (length history) 1)
+        ; no effect: the open submenu, its keys and its timeout stay
         {:state {:current-state :active
-                 :context (merge state.context {:menu menu})}
-         :effect :open-menu})))
+                 :context (merge state.context
+                                 {:history (icollect [i m (ipairs history)]
+                                             (if (= i 1) menu m))})}}
+        (do
+          ;; Re-rendering the root stops the timeout of a repeatable key.
+          (when stop-repeat-timeout
+            (hs.timer.doAfter 0 start-modal-timeout))
+          {:state {:current-state :active
+                   :context (merge state.context {:menu menu :history [menu]})}
+           :effect :open-menu}))))
 
 
 (fn active->leave-app
@@ -465,8 +480,13 @@ switching menus in one place which is then powered by config.fnl.
        (log.df (hs.inspect (map #(. $1 :title) state.context.history)))))))
 
 (local modal-effect
-       (statemachine.effect-handler
-        {:open-menu show-modal-menu}))
+       (let [handle (statemachine.effect-handler {:open-menu show-modal-menu})]
+         (fn [transition]
+           ;; A transition without an effect (including a nil one) only updates
+           ;; the context; handling it would close the menu on screen while
+           ;; the state machine stays active.
+           (when transition.effect
+             (handle transition)))))
 
 (fn proxy-app-action
   [[action data]]
