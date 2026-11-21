@@ -448,6 +448,27 @@ background process, so Hammerspoon never waits on them; music on an external dri
 needs Hammerspoon to be allowed to access removable volumes (System Settings ›
 Privacy & Security › Files and Folders).
 
+** Notifications (=Cmd-SPC n=)
+
+=notifications.fnl= drives Notification Center through its accessibility tree. The
+/current/ notification is the one peeking in at the top right: the topmost banner,
+else the topmost alert (alerts stay until dismissed).
+
+| Key | Action                                                                     |
+|-----+----------------------------------------------------------------------------|
+| =n= | show or hide Notification Center (as clicking the menu bar clock)          |
+| =b= | bury the current notification: swipe it away, keeping it in the center     |
+| =x= | clear the current notification, removing it from Notification Center too   |
+| =c= | clear all notifications (asks first)                                       |
+
+=b= and =x= are repeatable, for several notifications in a row; both say so when no
+notification is on screen, or when Notification Center is open. Notifications have no
+accessibility action to swipe them away and macOS ignores synthetic trackpad swipes,
+so =b= drags the notification off to the right with synthetic mouse events and puts
+the pointer back; the pointer visibly jumps for a fraction of a second. =x= uses the
+notification's own =Close= action. =c= opens Notification Center if needed, picks
+=Clear All Notifications= from its =Clear Notifications…= menu, and closes it again.
+
 ** Radio (=Cmd-SPC a R=)
 
 =radio.fnl= plays internet radio like eradio, under the same keys as =SPC a R= in

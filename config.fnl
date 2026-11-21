@@ -148,6 +148,23 @@
                        {:key :n :title "Now Playing" :action "media:now-playing"}
                        {:key :a :title "Open mpv" :action "mpv:open"}])
 
+;; Notification Center. The current notification is the one peeking in at
+;; the top right; burying swipes it away but keeps it in Notification Center.
+(local notification-bindings [{:key :n
+                               :title "Notification Center"
+                               :action "notifications:open"}
+                              {:key :b
+                               :title "Bury Current"
+                               :action "notifications:bury-current"
+                               :repeatable true}
+                              {:key :x
+                               :title "Clear Current"
+                               :action "notifications:clear-current"
+                               :repeatable true}
+                              {:key :c
+                               :title "Clear All"
+                               :action "notifications:clear-all"}])
+
 (local emacs-bindings [{:key :c
                         :title :Capture
                         :action (fn []
@@ -283,6 +300,7 @@
         {:key :b :title :Buffers :items buffer-bindings}
         {:key :a :title :Apps :items app-bindings}
         {:key :m :title :Media :items media-bindings}
+        {:key :n :title :Notifications :items notification-bindings}
         {:key :x :title :Emacs :items emacs-bindings}
         {:key :d :title :Display :items display-bindings}
         {:key :k
