@@ -42,9 +42,10 @@ Clicking an element in a background window focuses that window first.
 Scroll events are posted at the area's location, so the pointer doesn't move.
 
 Limitations: apps that expose little through Accessibility (games, some
-cross-platform toolkits) get few or no hints. Electron apps are asked to build
-their tree (=AXManualAccessibility=) on first use, so the first invocation there
-may miss web content. Context menus opened by a right click can't be hinted;
+cross-platform toolkits) get few or no hints. Browsers and Electron apps build
+their web accessibility tree only once it is first asked for (Electron via
+=AXManualAccessibility=), so on the first invocation in a freshly launched app
+web hints appear a moment after the rest. Context menus opened by a right click can't be hinted;
 use the arrow keys or type-ahead there.
 
 ** Search (=Ctrl-Alt-SPC=) in the minibuffer, and the echo area

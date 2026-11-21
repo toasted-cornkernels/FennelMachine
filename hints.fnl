@@ -268,18 +268,21 @@ selected one, with the same modifiers as above.
 (fn wake-web-content []
   "Electron and Chromium only build their web accessibility tree once an
   assistive app asks for it, which AXManualAccessibility does without the
-  side effects of AXEnhancedUserInterface. The tree is built asynchronously,
-  so the very first invocation in such an app may miss web content."
+  side effects of AXEnhancedUserInterface. Safari (WebKit) builds it the
+  first time a client lists the web view's children. Either way the tree
+  arrives asynchronously, so the first walk in a process may miss web
+  content. Returns true the first time a process is seen."
   (let [app (hs.application.frontmostApplication)
         pid (and app (: app :pid))]
     (when (and pid (not (. woken-pids pid)))
       (tset woken-pids pid true)
       (pcall #(: (hs.axuielement.applicationElement app)
-                 :setAttributeValue :AXManualAccessibility true)))))
+                 :setAttributeValue :AXManualAccessibility true))
+      true)))
 
 (fn collect-candidates []
-  (wake-web-content)
-  (let [acc []
+  (let [woken? (wake-web-content)
+        acc []
         budget {:visited 0 :deadline (+ (now) time-budget-ns)}
         started (now)
         clip (screen-clip)
@@ -293,7 +296,7 @@ selected one, with the same modifiers as above.
     (let [result (dedupe acc)]
       (log.df "%d hints from %d elements in %.0f ms" (length result)
               budget.visited (/ (- (now) started) 1e6))
-      result)))
+      (values result woken?))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -470,6 +473,8 @@ selected one, with the same modifiers as above.
     (: state.tap :stop)
     (when state.scroller
       (: state.scroller :stop))
+    (when state.rescanner
+      (: state.rescanner :stop))
     (each [_ {: canvas} (ipairs state.canvases)]
       (: canvas :delete))
     (set state nil)))
@@ -668,21 +673,49 @@ selected one, with the same modifiers as above.
         (= key :space) true
         (do (hide-hints) false))))
 
+(fn label! [candidates]
+  (let [labels (make-labels (length candidates))]
+    (each [i c (ipairs candidates)]
+      (set c.label (. labels i)))))
+
+(local rescan-interval 0.25)
+(local rescan-limit 12)
+
+(fn rescan []
+  "Pick up web content that appears after the first walk woke it. Stops at a
+  fixpoint (no new elements after some did appear), once a label is being
+  typed, or when the time is up."
+  (set state.rescans (+ state.rescans 1))
+  (let [candidates (collect-candidates)
+        grew? (> (length candidates) (length state.hints))]
+    (when grew?
+      (label! candidates)
+      (set state.hints candidates)
+      (set state.grown? true)
+      (render))
+    (when (or (and state.grown? (not grew?)) (>= state.rescans rescan-limit))
+      (: state.rescanner :stop))))
+
 (fn show-hints []
   "Label every clickable element on screen and wait for a label to be typed."
   (hide-hints)
-  (let [candidates (collect-candidates)]
+  (let [(candidates woken?) (collect-candidates)]
     (if (= (length candidates) 0)
         (minibuffer.message "No clickable elements found")
-        (let [labels (make-labels (length candidates))]
-          (each [i c (ipairs candidates)]
-            (set c.label (. labels i)))
+        (do
+          (label! candidates)
           (set state {:hints candidates
                       :typed ""
                       :canvases (make-canvases)
                       :tap (hs.eventtap.new [types.keyDown] on-key)})
           (render)
-          (: state.tap :start)))))
+          (: state.tap :start)
+          (when woken?
+            (set state.rescans 0)
+            (set state.rescanner
+                 (hs.timer.doEvery rescan-interval
+                                   #(when (and state (= state.typed ""))
+                                      (rescan)))))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
