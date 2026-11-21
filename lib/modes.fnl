@@ -18,7 +18,7 @@ Commands are {:title str :fn (fn [app] ...)} tables keyed by a dotted id. They
 receive the application they act on and can be run without a key sequence via
 execute-command.
 
-`Cmd-SPC m` (local-leader) resolves the frontmost app once, at entry, and opens
+`Cmd-Shift-,` (local-leader) resolves the frontmost app once, at entry, and opens
 its keymap through lib.modal, which handles display, Back and Escape.
 "
 (local {: concat
@@ -34,7 +34,7 @@ its keymap through lib.modal, which handles display, Back and Escape.
 
 (local log (hs.logger.new "modes.fnl" "info"))
 
-(local leader-path "Cmd-SPC m")
+(local leader-path "Cmd-Shift-,")
 
 (local modes [])
 (local commands {})
@@ -298,6 +298,7 @@ Cmd chords pass through so shortcuts like Cmd-, keep working.
                           :mods child.mods
                           :title (node->item child width)
                           :command child.command
+                          :repeatable child.repeatable
                           :action #(execute-command child.command app)}))
                    node.items)
         menu-items (concat [{:key "" :title (join " › " trail)}] items)
@@ -313,7 +314,7 @@ Cmd chords pass through so shortcuts like Cmd-, keep working.
 (fn local-leader
   [?quiet]
   "
-  Menu resolver for `Cmd-SPC m`. Returns the frontmost application's mode
+  Menu resolver for the local leader, `Cmd-Shift-,`. Returns the frontmost application's mode
   keymap as a modal menu, or nil (after notifying, unless ?QUIET) when it has
   no mode.
   "

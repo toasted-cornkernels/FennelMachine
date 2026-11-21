@@ -92,12 +92,12 @@ switching menus in one place which is then powered by config.fnl.
 (fn activate-local-leader
   []
   "
-  The local leader: open the frontmost app's mode keymap directly, exactly as
-  `Cmd-SPC m` does (so `SPC` still goes back to the leader menu).
+  The local leader: open the frontmost app's mode keymap on top of the leader
+  menu (so `SPC` and C-g still go back to it).
   "
   (deactivate-modal)
   (activate-modal)
-  (enter-modal :m))
+  (enter-modal :local-leader))
 
 
 (fn previous-modal
@@ -309,6 +309,21 @@ switching menus in one place which is then powered by config.fnl.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
+(fn local-leader-item
+  [config]
+  "
+  The local leader isn't in the leader menu but is entered like one of its
+  items, built by config's :local-leader and keyed by its own hotkey for the
+  which-key echo line.
+  "
+  (let [hotkey (find #(= $1.action "lib.modal:activate-local-leader")
+                     (or config.keys []))]
+    {:key (and hotkey hotkey.key)
+     :mods (and hotkey hotkey.mods)
+     :menu-fn config.local-leader
+     :local-leader? true}))
+
+
 (fn ->menu
   [state action menu-key]
   "
@@ -324,7 +339,9 @@ switching menus in one place which is then powered by config.fnl.
          :menu prev-menu} state.context
         app-menu (apps.get-app)
         item (when menu-key
-               (find (by-key menu-key) prev-menu.items))
+               (if (= menu-key :local-leader)
+                   (local-leader-item config)
+                   (find (by-key menu-key) prev-menu.items)))
         menu (if (not menu-key)
                  (if (and app-menu (has-some? app-menu.items))
                      app-menu
@@ -332,10 +349,11 @@ switching menus in one place which is then powered by config.fnl.
                  (and item item.menu-fn)
                  (let [built (item.menu-fn)]
                    ;; Built menus don't know the key that opened them; record
-                   ;; it so the which-key echo line can show e.g. `SPC m-`.
+                   ;; it so the which-key echo line can show e.g. `s-< b-`.
                    (when built
                      (set built.leader-key item.key)
-                     (set built.leader-mods item.mods))
+                     (set built.leader-mods item.mods)
+                     (set built.local-leader? item.local-leader?))
                    built)
                  item)]
     (if menu

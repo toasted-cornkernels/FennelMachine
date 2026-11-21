@@ -187,7 +187,9 @@ echo line such as `SPC w-` underneath.
     (set text (.. text (styled "\n" palette.fg))))
   (.. text
       (styled "\n" palette.fg)
-      (styled echo.path palette.fg)
+      ;; Zero-width non-joiners keep the font's programming ligatures out of
+      ;; key paths, or e.g. `s-<-` (Cmd-Shift-,) reads as an arrow.
+      (styled (echo.path:gsub utf8.charpattern "%0\u{200C}") palette.fg)
       (styled (.. " " echo.label "  [C-g back, ESC quit]") palette.dim)))
 
 (fn echo-for
@@ -202,7 +204,9 @@ echo line such as `SPC w-` underneath.
                   header header.title
                   (let [t (or menu.title "")]
                     (if (= (t:sub 1 1) "+") (t:sub 2) t)))]
-    {:path (.. (join " " (concat ["SPC"] keys)) "-")
+    {:path (.. (join " " (concat (if (?. history 2 :local-leader?) [] ["SPC"])
+                                 keys))
+               "-")
      : label}))
 
 (fn hide

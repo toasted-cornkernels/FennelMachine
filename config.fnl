@@ -7,7 +7,7 @@
 (local input-method (require :input-method))
 (local display (require :display))
 (local modes (require :lib.modes))
-(local {: concat : logf : filter : identity} (require :lib.functional))
+(local {: concat : logf : filter : identity : merge} (require :lib.functional))
 (local {: desparsify} (require :lib.utils))
 
 ;; Actions ==========================================
@@ -123,40 +123,30 @@
          (app-binding-if-exists :KakaoTalk :k)
          {:mods [:shift] :key :r :title :Radio :items radio-bindings}]))
 
+;; System media, as the media keys: they control what macOS shows in Now
+;; Playing. EMMS has its own keys in Emacs' mode keymap (Cmd-Shift-, a m e).
 (local media-bindings [{:key :h
                         :title "Prev Track"
-                        :action "mpv:prev-track"
+                        :action "media:previous-track"
                         :repeatable true}
                        {:key :j
                         :title "Volume Down"
-                        :action "mpv:volume-down"
+                        :action "media:volume-down"
                         :repeatable true}
                        {:key :k
                         :title "Volume Up"
-                        :action "mpv:volume-up"
+                        :action "media:volume-up"
                         :repeatable true}
                        {:key :l
                         :title "Next Track"
-                        :action "mpv:next-track"
+                        :action "media:next-track"
                         :repeatable true}
                        {:key :s
                         :title "Play or Pause"
-                        :action "mpv:play-or-pause"}
-                       {:key "," :title "Back 10s" :action "mpv:seek-backward"
-                        :repeatable true}
-                       {:key "." :title "Forward 10s" :action "mpv:seek-forward"
-                        :repeatable true}
-                       {:mods [:shift] :key ","
-                        :title "Back 1m"
-                        :action "mpv:seek-backward-more"
-                        :repeatable true}
-                       {:mods [:shift] :key "."
-                        :title "Forward 1m"
-                        :action "mpv:seek-forward-more"
-                        :repeatable true}
-                       {:key :m :title :Mute :action "mpv:mute"}
-                       {:key :n :title "Now Playing" :action "mpv:show-now-playing"}
-                       {:key :a :title "Open EMMS" :action "mpv:open-emms"}])
+                        :action "media:play-or-pause"}
+                       {:key :m :title :Mute :action "media:mute"}
+                       {:key :n :title "Now Playing" :action "media:now-playing"}
+                       {:key :a :title "Open mpv" :action "mpv:open"}])
 
 (local emacs-bindings [{:key :c
                         :title :Capture
@@ -292,8 +282,7 @@
          :items window-bindings}
         {:key :b :title :Buffers :items buffer-bindings}
         {:key :a :title :Apps :items app-bindings}
-        {:key :p :title :Media :items media-bindings}
-        {:key :m :title :Mode :menu-fn modes.local-leader}
+        {:key :m :title :Media :items media-bindings}
         {:key :x :title :Emacs :items emacs-bindings}
         {:key :d :title :Display :items display-bindings}
         {:key :k
@@ -439,7 +428,7 @@
 
 ;; Application Modes ================================
 ;; ==================================================
-;; `Cmd-SPC m` opens the keymap of the frontmost app's mode (see lib/modes.fnl).
+;; `Cmd-Shift-,` opens the keymap of the frontmost app's mode (see lib/modes.fnl).
 ;; Keymaps are prefix tries: :items nodes are named prefixes, :command nodes
 ;; run a command registered by the mode's :commands table.
 
@@ -833,7 +822,38 @@
                  {:key :i :title :from-history :command :emacs.consult-yank-from-kill-ring}]}
         {:key :a
          :title :utilities
-         :items [{:key :o
+         :items [{:key :m
+                  :title :emms
+                  :items [{:key :e
+                           :title :emms
+                           :items [{:key :e :title :emms :command :emacs.emms}
+                                   {:key :s :title :play-pause :command :emms.play-or-pause}
+                                   {:key :h :title :previous :command :emms.previous
+                                    :repeatable true}
+                                   {:key :l :title :next :command :emms.next
+                                    :repeatable true}
+                                   {:key :p :title :previous :command :emms.previous
+                                    :repeatable true}
+                                   {:key :n :title :next :command :emms.next
+                                    :repeatable true}
+                                   {:key "," :title :back-10s :command :emms.seek-backward
+                                    :repeatable true}
+                                   {:key "." :title :forward-10s :command :emms.seek-forward
+                                    :repeatable true}
+                                   {:mods [:shift] :key "," :title :back-1m
+                                    :command :emms.seek-backward-more :repeatable true}
+                                   {:mods [:shift] :key "." :title :forward-1m
+                                    :command :emms.seek-forward-more :repeatable true}
+                                   {:key :j :title :volume-down :command :emms.volume-down
+                                    :repeatable true}
+                                   {:key :k :title :volume-up :command :emms.volume-up
+                                    :repeatable true}
+                                   {:key :m :title :mute :command :emms.mute}
+                                   {:key :i :title :now-playing :command :emms.now-playing}
+                                   {:key :d :title :play-directory :command :emacs.emms-play-directory}
+                                   {:key :f :title :play-file :command :emacs.emms-play-file}
+                                   {:key :u :title :play-url :command :emacs.emms-play-url}]}]}
+                 {:key :o
                   :title :org
                   :items [{:key :o :title :agenda :command :emacs.org-agenda}
                           {:key :a :title :agenda-list :command :emacs.org-agenda-list}
@@ -896,12 +916,13 @@
        {:id :emacs-mode
         :title :Emacs
         :bundle-ids [:org.gnu.Emacs]
-        :commands (emacs.commands-for emacs-keymap)
+        :commands (merge (emacs.commands-for emacs-keymap) (. (require :mpv) :commands))
         :keymap emacs-keymap})
 
 (local config {:title "Main Menu"
                :items menu-items
                :keys agnostic-keys
+               :local-leader modes.local-leader
                :enter (fn []
                         (windows.hide-display-numbers))
                :exit (fn []

@@ -23,20 +23,36 @@
       (string.format "%q" (.. hs.configdir "/spacehammer.el"))
       " nil t)) " form ")"))
 
+(fn failure
+  [code stderr]
+  "What went wrong in an emacsclient run that exited with CODE and STDERR."
+  (if (= code nil)
+      "emacsclient not found"
+      (or (stderr:find "can't connect" 1 true)
+          (stderr:find "can't find socket" 1 true)
+          (stderr:find "No socket" 1 true))
+      "Emacs isn't running its server: M-x server-start"
+      (.. "emacsclient failed: "
+          (or (stderr:match "[^\n]+") (.. "exit code " code)))))
+
 (fn emacsclient
   [args on-exit]
   "Run emacsclient with ARGS (no shell involved); log failures to the console.
   ON-EXIT, if given, is called with the exit code, stdout and stderr (code nil
-  without emacsclient)."
+  without emacsclient). Without it, failures are also shown in the echo area."
+  (fn report [code stdout stderr]
+    (when (and (not on-exit) (not= code 0))
+      ((. (require :lib.minibuffer) :message) (failure code stderr)))
+    (when on-exit (on-exit code stdout stderr)))
   (if (not emacsclient-path)
       (do (log.w "emacsclient not found; install Emacs or add it to PATH")
-          (when on-exit (on-exit nil "" "")))
+          (report nil "" ""))
       (: (hs.task.new emacsclient-path
                       (fn [code stdout stderr]
                         (when (not= code 0)
                           (log.w (.. "emacsclient failed (" code "): " stderr
                                      stdout)))
-                        (when on-exit (on-exit code stdout stderr))
+                        (report code stdout stderr)
                         true)
                       args)
          :start)))
@@ -177,6 +193,7 @@
  :edit-with-emacs                  edit-with-emacs
  :editWithEmacsCallback            edit-with-emacs-callback
  :emacsclient                      emacsclient
+ :emacsclient-failure              failure
  :full-screen                      full-screen
  :maximize                         maximize
  :note                             (fn [] (capture true))

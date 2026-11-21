@@ -1,7 +1,7 @@
-;; Media controls for mpv, through its JSON IPC socket (--input-ipc-server, or
-;; the one mpv-scripts/ipc-socket.lua gives every other mpv).
-;; mpv instances started by EMMS are driven through EMMS for play/pause and
-;; tracks, so EMMS keeps its playlist and paused state in sync.
+;; EMMS's controls (Emacs' mode keymap, Cmd-Shift-, a m e), through the JSON IPC
+;; socket of the mpv EMMS started (--input-ipc-server). Play/pause and tracks go
+;; through EMMS, so it keeps its playlist and paused state; volume, mute and
+;; seeking go to mpv directly. Also `open`, for Cmd-SPC m a.
 
 (local minibuffer (require :lib.minibuffer))
 (local emacs (require :emacs))
@@ -10,7 +10,6 @@
 (local timeout 1)
 (local volume-step 5)
 (local pending {})
-(var last-socket nil)
 
 (local socket-dir (: (or (os.getenv :TMPDIR) "/tmp") :gsub "/$" ""))
 
@@ -103,43 +102,14 @@
            (: sock :write (.. (hs.json.encode {: command :request_id i}) "\n")))
          (: sock :read "\n")))))
 
-(fn playing? [instance callback]
-  (request instance.socket [["get_property" "pause"]
-                            ["get_property" "idle-active"]]
-           (fn [[pause idle]]
-             (callback (and pause idle
-                            (= pause.data false)
-                            (= idle.data false))))))
-
-(fn choose [found answers]
-  "The playing instance, else the one controlled last, else the newest."
-  (var choice nil)
-  (each [i instance (ipairs found) &until choice]
-    (when (. answers i) (set choice instance)))
-  (each [_ instance (ipairs found) &until choice]
-    (when (= instance.socket last-socket) (set choice instance)))
-  (or choice (. found 1)))
-
-(fn with-instance [f]
-  "Call F with the mpv to control (see `choose`)."
-  (fn control [instance]
-    (set last-socket instance.socket)
-    (f instance))
+(fn with-emms [f]
+  "Call F with the mpv that EMMS started."
   (instances
    (fn [found]
-     (if (= 0 (length found))
-         (minibuffer.message "No mpv with an IPC socket is running")
-         (= 1 (length found))
-         (control (. found 1))
-         (let [answers {}
-               state {:remaining (length found)}]
-           (each [i instance (ipairs found)]
-             (playing? instance
-                       (fn [yes?]
-                         (tset answers i yes?)
-                         (set state.remaining (- state.remaining 1))
-                         (when (= 0 state.remaining)
-                           (control (choose found answers)))))))))))
+     (let [instance (hs.fnutils.find found #$1.emms?)]
+       (if instance
+           (f instance)
+           (minibuffer.message "EMMS has no mpv running"))))))
 
 (fn show-status [instance]
   (request instance.socket [["get_property" "pause"]
@@ -162,7 +132,6 @@
     (request instance.socket [["get_property" property]]
              (fn [[response]] (callback (and response response.data)))))
   (get (fn [before]
-         (emacs.emacsclient ["-e" form])
          (var tries 15)
          (fn poll []
            (set tries (- tries 1))
@@ -172,51 +141,35 @@
                           (show-hud instance)
                           (show-status instance))
                       (hs.timer.doAfter 0.2 poll)))))
-         (hs.timer.doAfter 0.2 poll))))
-
-(fn command [instance cmd on-error after]
-  (request instance.socket [cmd]
-           (fn [[response]]
-             (if (and response (= response.error :success))
-                 ((or after show-status) instance)
-                 (minibuffer.message
-                  (if response (or on-error response.error)
-                      "mpv isn't responding"))))))
+         (emacs.emacsclient ["-e" form]
+                            (fn [code _ stderr]
+                              (if (= code 0)
+                                  (poll)
+                                  (minibuffer.message
+                                   (emacs.emacsclient-failure code stderr))))))))
 
 (fn play-or-pause []
-  "Toggle pause in mpv (EMMS's mpv through EMMS)."
-  (with-instance
-   (fn [instance]
-     (if instance.emms?
-         (emms "(if emms-player-playing-p (emms-pause) (emms-start))" instance
-               "pause")
-         (command instance ["cycle" "pause"])))))
+  "Play or pause EMMS."
+  (with-emms
+   #(emms "(if emms-player-playing-p (emms-pause) (emms-start))" $1 "pause")))
 
 (fn next-track []
-  "Play the next track in mpv's playlist (or EMMS's)."
-  (with-instance
-   (fn [instance]
-     (if instance.emms?
-         (emms "(emms-next)" instance "path")
-         (command instance ["playlist-next"] "No next track" show-hud)))))
+  "Play EMMS's next track, then show Now Playing."
+  (with-emms #(emms "(emms-next)" $1 "path")))
 
 (fn prev-track []
-  "Play the previous track in mpv's playlist (or EMMS's)."
-  (with-instance
-   (fn [instance]
-     (if instance.emms?
-         (emms "(emms-previous)" instance "path")
-         (command instance ["playlist-prev"] "No previous track" show-hud)))))
+  "Play EMMS's previous track, then show Now Playing."
+  (with-emms #(emms "(emms-previous)" $1 "path")))
 
 (fn change-volume [delta]
-  (with-instance
+  (with-emms
    (fn [instance]
      (request instance.socket [["add" "volume" delta]
                                ["get_property" "volume"]]
               (fn [[_ volume]]
                 (minibuffer.message
                  (if (and volume (= volume.error :success))
-                     (string.format "mpv volume: %d%%" volume.data)
+                     (string.format "EMMS volume: %d%%" volume.data)
                      "mpv isn't responding")))))))
 
 (fn clock [seconds]
@@ -226,15 +179,15 @@
         (string.format "%d:%02d" (// s 60) (% s 60)))))
 
 (fn seek [seconds]
-  "Seek mpv SECONDS forward (negative: backward) in the current track."
-  (with-instance
+  "Seek EMMS's track SECONDS forward (negative: backward)."
+  (with-emms
    (fn [instance]
      (fn report []
        (request instance.socket [["get_property" "time-pos"]
                                  ["get_property" "duration"]]
                 (fn [[pos duration]]
                   (minibuffer.message
-                   (.. "mpv: " (clock (and pos pos.data))
+                   (.. "EMMS: " (clock (and pos pos.data))
                        (if (and duration (= (type duration.data) :number))
                            (.. " / " (clock duration.data))
                            ""))))))
@@ -247,63 +200,116 @@
                     (hs.timer.doAfter 0.15 report)))))))
 
 (fn seek-forward []
-  "Seek mpv 10 seconds forward."
+  "Seek EMMS 10 seconds forward."
   (seek 10))
 
 (fn seek-backward []
-  "Seek mpv 10 seconds backward."
+  "Seek EMMS 10 seconds backward."
   (seek -10))
 
 (fn seek-forward-more []
-  "Seek mpv a minute forward."
+  "Seek EMMS a minute forward."
   (seek 60))
 
 (fn seek-backward-more []
-  "Seek mpv a minute backward."
+  "Seek EMMS a minute backward."
   (seek -60))
 
 (fn volume-up []
-  "Raise mpv's volume."
+  "Raise the volume of EMMS's mpv."
   (change-volume volume-step))
 
 (fn volume-down []
-  "Lower mpv's volume."
+  "Lower the volume of EMMS's mpv."
   (change-volume (- volume-step)))
 
 (fn mute []
-  "Toggle mute in mpv."
-  (with-instance
+  "Mute or unmute EMMS's mpv."
+  (with-emms
    (fn [instance]
      (request instance.socket [["cycle" "mute"] ["get_property" "mute"]]
               (fn [[_ muted]]
                 (minibuffer.message
                  (if (not (and muted (= muted.error :success)))
                      "mpv isn't responding"
-                     muted.data "mpv muted"
-                     "mpv unmuted")))))))
+                     muted.data "EMMS muted"
+                     "EMMS unmuted")))))))
 
 (fn show-now-playing []
   "Show the Now Playing HUD (album art, title, artist, album, progress), or
   hide it if it is showing."
   (if (now-playing.visible?)
       (now-playing.hide)
-      (with-instance show-hud)))
+      (with-emms show-hud)))
 
-(fn open-emms []
-  "Show EMMS's playlist (or the music directory) in an Emacs frame named EMMS."
-  (emacs.emacsclient
-   ["-e"
-    "(let ((frame (or (seq-find (lambda (f) (equal (frame-parameter f 'name) \"EMMS\"))
-                               (frame-list))
-                     (make-frame '((name . \"EMMS\"))))))
-       (select-frame-set-input-focus frame)
-       (with-selected-frame frame
-         (if (and (boundp 'emms-playlist-buffer) (buffer-live-p emms-playlist-buffer))
-             (emms-playlist-mode-go)
-           (dired (if (boundp 'emms-source-file-default-directory)
-                      emms-source-file-default-directory
-                    \"~/Music\")))))"])
-  (hs.timer.doAfter 0.2 #(hs.application.launchOrFocus :Emacs)))
+(local executables ["/opt/homebrew/bin/mpv" "/usr/local/bin/mpv"
+                    (.. "/etc/profiles/per-user/" (os.getenv :USER) "/bin/mpv")
+                    "/run/current-system/sw/bin/mpv"])
+
+(fn executable []
+  "The mpv binary, if installed."
+  (hs.fnutils.find executables #(hs.fs.attributes $1)))
+
+(fn players []
+  "Running mpvs that can show video: all but audio-only ones, like EMMS's and
+  the radio's (--no-video)."
+  (icollect [_ app (ipairs (hs.application.runningApplications))]
+    (when (and (or (= (: app :bundleID) :io.mpv) (= (: app :name) :mpv))
+               (not (: (hs.execute (.. "/bin/ps -o args= -p " (: app :pid)))
+                       :find "--no-video" 1 true)))
+      app)))
+
+(fn show [app]
+  "Focus APP's window, or activate APP: macOS then switches to the Space of its
+  window, which it can't open on a full screen Space."
+  (let [window (hs.fnutils.find (: app :allWindows) #(: $1 :isStandard))]
+    (if window
+        (: window :focus)
+        (: app :activate true))
+    window))
+
+(fn await-window [pid]
+  "Show the window of the mpv with PID once it has opened it."
+  (var tries 30)
+  (fn check []
+    (set tries (- tries 1))
+    ;; Not applicationForPID: it logs an error until mpv has registered.
+    (let [app (hs.fnutils.find (hs.application.runningApplications)
+                               #(= (: $1 :pid) pid))]
+      (when (and (not (and app (show app))) (> tries 0))
+        (hs.timer.doAfter 0.15 check))))
+  (check))
+
+(fn open []
+  "Show mpv's window, else open mpv's idle window, to drop files or URLs on."
+  (let [player (. (players) 1)
+        path (executable)]
+    (if player
+        (show player)
+        (not path)
+        (minibuffer.message "mpv is not installed")
+        ;; Detached, so it outlives a Hammerspoon reload.
+        (: (hs.task.new "/bin/sh"
+                        (fn [_ out]
+                          (let [pid (tonumber (out:match "%d+"))]
+                            (when pid (await-window pid))))
+                        ["-c" (.. "nohup '" path "' --player-operation-mode=pseudo-gui"
+                                  " >/dev/null 2>&1 & echo $!")])
+           :start))))
+
+;; Commands for Emacs' mode keymap (config.fnl), which runs them with the app.
+(local commands
+       {:emms.play-or-pause {:title "Play or pause EMMS" :fn #(play-or-pause)}
+        :emms.next {:title "EMMS's next track" :fn #(next-track)}
+        :emms.previous {:title "EMMS's previous track" :fn #(prev-track)}
+        :emms.seek-forward {:title "Seek 10 seconds forward" :fn #(seek-forward)}
+        :emms.seek-backward {:title "Seek 10 seconds backward" :fn #(seek-backward)}
+        :emms.seek-forward-more {:title "Seek a minute forward" :fn #(seek-forward-more)}
+        :emms.seek-backward-more {:title "Seek a minute backward" :fn #(seek-backward-more)}
+        :emms.volume-up {:title "Raise mpv's volume" :fn #(volume-up)}
+        :emms.volume-down {:title "Lower mpv's volume" :fn #(volume-down)}
+        :emms.mute {:title "Mute or unmute mpv" :fn #(mute)}
+        :emms.now-playing {:title "Now Playing HUD" :fn #(show-now-playing)}})
 
 {: play-or-pause
  : seek
@@ -317,6 +323,8 @@
  : volume-up
  : volume-down
  : mute
- : open-emms
+ : open
+ : executable
+ : commands
  : instances
  : request}

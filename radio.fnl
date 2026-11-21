@@ -6,9 +6,6 @@ play it in a background mpv, which the Media keys also control"
 (local mpv (require :mpv))
 
 (local socket (.. (: (or (os.getenv :TMPDIR) "/tmp") :gsub "/$" "") "/mpv-radio.sock"))
-(local mpv-paths ["/opt/homebrew/bin/mpv" "/usr/local/bin/mpv"
-                  (.. "/etc/profiles/per-user/" (os.getenv :USER) "/bin/mpv")
-                  "/run/current-system/sw/bin/mpv"])
 
 ;; Read when Emacs can't be asked, e.g. its server isn't running.
 (local init-files [(.. (os.getenv :HOME) "/.emacs.d/init.el")
@@ -58,16 +55,12 @@ play it in a background mpv, which the Media keys also control"
          (set stations decoded))
        (callback (or stations (init-file-stations) []))))))
 
-(fn mpv-path []
-  (accumulate [found nil _ path (ipairs mpv-paths)]
-    (or found (when (hs.fs.attributes path) path))))
-
 (fn sh-quote [s]
   (.. "'" (s:gsub "'" "'\\''") "'"))
 
 (fn spawn [station]
   "Start the radio mpv, detached so it outlives a Hammerspoon reload."
-  (let [path (mpv-path)]
+  (let [path (mpv.executable)]
     (if (not path)
         (minibuffer.message "mpv is not installed")
         (do

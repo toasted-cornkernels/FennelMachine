@@ -6,6 +6,11 @@ This is an indispensable config that is based on the awesome [[https://github.co
 
 When git-cloning, clone the submodules with ~git clone --recursive~.
 
+Everything that talks to Emacs (EMMS play/pause/tracks, the radio's stations, Emacs
+mode commands, capture, "Open in Emacs") uses =emacsclient=, so Emacs must be running
+its server; ELispMachine's =init.el= starts it. If it isn't, those keys say
+"Emacs isn't running its server: M-x server-start" in the echo area.
+
 ** Keyboard hints (=Cmd-Shift-SPC=) and scrolling (=Cmd-Shift-J=)
 
 =hints.fnl= is a Homerow / Vimium style layer built on the Accessibility API.
@@ -109,8 +114,8 @@ App Shortcuts are ordinary menu items, which the search (=Ctrl-Alt-SPC=) finds.
 are the apps (=/Applications=, =/System/Applications=, =~/Applications= and their
 subfolders such as Nix Apps), the panes of System Settings, system commands (lock,
 sleep, restart, shut down, log out, empty or open the Trash, eject, dark mode, keep
-awake, mpv and volume controls, clipboard history, converting a time between time
-zones), every Keyboard Shortcuts command, and
+awake, media and volume controls, opening mpv, clipboard history, converting a time
+between time zones), every Keyboard Shortcuts command, and
 =Quit=, =Hide= and =Force Quit= for each running app. The ones you pick most often
 move to the top. Depending on what you type, it also offers:
 
@@ -379,31 +384,60 @@ and copies it, e.g. =2026-12-25 Fri 22:00 CET=.
 Times come from the system's time zone database (=lib/tz.fnl= reads
 =/var/db/timezone/zoneinfo=), past 2037 by each zone's DST rule.
 
-** Media (=Cmd-SPC p=)
+** Media (=Cmd-SPC m=)
 
-=mpv.fnl= controls mpv through its JSON IPC socket: the one given with
-=--input-ipc-server= (as EMMS does), else =$TMPDIR/mpv-<pid>.sock=, which the mpv
-script =mpv-scripts/ipc-socket.lua= opens in every other mpv and removes on quit.
-Home Manager links that script to =~/.config/mpv/scripts/=; without it, only mpv
-started with =--input-ipc-server= is found. The echo area shows the result; seeking shows the new position, or updates the HUD if it is open.
+=media.fnl= sends the keyboard's media keys, so these control whatever macOS shows
+in Now Playing: Music, a browser tab, any mpv (EMMS's and the radio's too), and so on.
 
-| Key           | Action                                                    |
-|---------------+-----------------------------------------------------------|
-| =s=           | play or pause                                             |
-| =h= / =l=     | previous / next track (repeatable), then show Now Playing |
-| =,= / =.=     | seek back / forward 10 seconds (repeatable)               |
-| =<= / =>=     | seek back / forward 1 minute (repeatable)                 |
-| =j= / =k=     | mpv's volume down / up by 5 (repeatable)                  |
-| =m=           | mute or unmute mpv                                        |
-| =n=           | show or hide the Now Playing HUD                          |
-| =a=           | open EMMS's playlist in an Emacs frame named =EMMS=       |
+| Key       | Action                                                            |
+|-----------+-------------------------------------------------------------------|
+| =s=       | play or pause                                                     |
+| =h= / =l= | previous / next track (repeatable)                                |
+| =j= / =k= | system volume down / up (repeatable)                              |
+| =m=       | mute or unmute the system volume                                  |
+| =n=       | show or hide macOS's Now Playing (art, title, position, controls) |
+| =a=       | open mpv                                                          |
 
-When several mpv instances are running, the keys control the one that is playing,
-else the one controlled last, else the newest. For the mpv that EMMS started, play,
-pause and tracks go through EMMS (=emms-pause=, =emms-next=, =emms-previous=), so
-its playlist and paused state stay in sync; volume and mute go to mpv directly. The
-launcher's =Play/Pause=, =Next Track=, =Previous Track= and =Now Playing= do the
-same, while its =Mute= and =Volume= commands still change the system volume.
+=n= presses Control Center's Now Playing menu bar item (Control Center itself when
+Now Playing isn't in the menu bar); =n= again or =Esc= closes it. macOS has no seek
+key that reaches players (fast-forward and rewind do nothing), so seeking is EMMS's
+=,= / =.= below.
+
+=a= (=mpv.fnl=) shows mpv's window, switching to its Space, else starts mpv's idle
+window (=--player-operation-mode=pseudo-gui=) to drop files or URLs on. Audio-only
+mpvs (=--no-video=, like EMMS's and the radio's) don't count. A full screen Space
+holds no other window, so from one, mpv opens on a desktop Space and =a= switches
+there.
+
+The launcher's =Play/Pause=, =Next Track=, =Previous Track=, =Now Playing= and
+=Open mpv= do the same.
+
+*** EMMS (=Cmd-Shift-, a m e= in Emacs)
+
+EMMS's keys are in Emacs' mode keymap, under the same keys as =SPC a m e= in
+=init.el=. =mpv.fnl= drives the mpv that EMMS started through its JSON IPC socket
+(=--input-ipc-server=): play, pause and tracks go through EMMS (=emms-pause=,
+=emms-next=, =emms-previous=, which needs the Emacs server, see Caveats), so its
+playlist and paused state stay in sync; seeking, volume and mute go to mpv directly.
+The echo area shows the result; seeking shows the new position, or updates the HUD if
+it is open.
+
+| Key                  | Action                                                    |
+|----------------------+-----------------------------------------------------------|
+| =e=                  | EMMS's playlist (=emms=)                                  |
+| =s=                  | play or pause                                             |
+| =h= / =l=, =p= / =n= | previous / next track (repeatable), then show the HUD     |
+| =,= / =.=            | seek back / forward 10 seconds (repeatable)               |
+| =<= / =>=            | seek back / forward 1 minute (repeatable)                 |
+| =j= / =k=            | mpv's volume down / up by 5 (repeatable)                  |
+| =m=                  | mute or unmute mpv                                        |
+| =i=                  | show or hide the Now Playing HUD                          |
+| =d= / =f= / =u=      | play a directory, file or URL (Emacs prompts)             |
+
+ELispMachine's =init.el= also makes EMMS follow the media keys (=Cmd-SPC m=, the
+keyboard, headphones, Control Center): mpv's play/pause and next/previous keys
+can't reach EMMS's playlist by themselves, so it watches mpv's =pause= property
+and binds mpv's =NEXT= / =PREV= keys to =emms-next= / =emms-previous=.
 
 The Now Playing HUD (=now-playing.fnl=) shows the album art, title, artist, album,
 position and a progress bar in the top-right corner. It updates every second, hides
@@ -428,8 +462,7 @@ Privacy & Security › Files and Folders).
 The stations are Emacs' =eradio-channels=: asked of Emacs (loading eradio if
 needed), else read from =~/.emacs.d/init.el= when its server isn't running. They
 play in a background mpv of their own (socket =$TMPDIR/mpv-radio.sock=), which
-picking another station reuses and the Media keys also control (pause, volume, mute,
-Now Playing).
+picking another station reuses; =Cmd-SPC m= controls it like any player.
 
 ** Help (=Cmd-SPC h=)
 
@@ -486,15 +519,12 @@ Help HUD keys:
 
 Cmd chords close the HUD and pass through to the app.
 
-** Application modes (=Cmd-SPC m=, =Cmd-Shift-,=)
+** Application modes (=Cmd-Shift-,=)
 
-Like Emacs major modes, the frontmost application selects a local keymap. =Cmd-SPC m=
-resolves the frontmost app once (by bundle id) and opens its keymap in the regular
-leader menu, so the which-key style popup, =C-g= (back) and =Esc= (cancel) behave as
-everywhere else. Media moved from =Cmd-SPC m= to =Cmd-SPC p=.
-
-=Cmd-Shift-,= is the Spacemacs-style local leader: it opens the mode keymap
-directly, exactly as =Cmd-SPC m= does, so =Cmd-Shift-, b n= is =Cmd-SPC m b n=.
+Like Emacs major modes, the frontmost application selects a local keymap.
+=Cmd-Shift-,=, the Spacemacs-style local leader, resolves the frontmost app once (by
+bundle id) and opens its keymap on top of the leader menu, so the which-key style
+popup, =C-g= (back to the leader menu) and =Esc= (cancel) behave as everywhere else.
 
 ** Which-key panel
 
@@ -503,7 +533,7 @@ the bottom of the screen with the focused window. Entries are sorted (commands f
 then =+prefix= groups) and laid out column by column, at least six rows high. Keys use
 Emacs notation: =s-h= is Cmd-h, =H= is Shift-h, =SPC= is space. Mode commands show
 their registry id, e.g. =finder.view.list=. The bottom echo line shows the key path
-and keymap, e.g. =SPC m v- finder-mode › view=.
+and keymap, e.g. =SPC w-= or, under the local leader, =s-< v- finder-mode › view=.
 
 Menu items marked =:repeatable true= (e.g. the =SPC w= move/resize keys) keep the menu
 open and auto-repeat while held, at the system key-repeat rate, even when they bring
@@ -545,7 +575,7 @@ items (Always Show Toolbar in Full Screen) toggle on each press.
 | =m=  | +bookmarks | =a= add, =l= add to reading list, =e= edit, =s= show/hide, =p= start page                       |
 | =d=  | +develop   | =i= web inspector, =c= JS console, =u= page source, =e= select element, =r= responsive design, =x= empty caches |
 
-=Cmd-SPC m t s= is only enabled in full screen; the Window items =m z f c g= are
+=Cmd-Shift-, t s= is only enabled in full screen; the Window items =m z f c g= are
 disabled there. The Develop group needs Settings › Advanced › "Show features for
 web developers". Run =modes["describe-mode"]("safari-mode")= for the full list.
 
@@ -572,6 +602,7 @@ builds the commands from the keymap in =config.fnl=, which is the only list.
 | =P=  | +project   | =p= switch, =f= find file, =b= buffer, =g= regexp, =d= dired, =c= compile, =k= kill buffers |
 | =h=  | +help      | =h= help, =f= =v= =k= =c= =s= =.= helpful, =m= mode, =b= bindings, =M= keymap, =x= char, =p= package |
 | =y=  | +yank      | =y= pop, =r= replace, =i= from history                                                   |
+| =a m e= | +emms  | see Media › EMMS                                                                         |
 | =a o= | +org      | =o= agenda, =a= agenda list, =c= capture, =t= todos, =s= search, =m= tags, =l= store link, |
 |      |            | =C= clock, =j= journal, =r= org-roam, =d= dailies                                         |
 | =L=  | +LLMs      | =l= gptel, =s= send, =m= menu, =q= abort, =r= rewrite, =a= add file, =.= add              |
@@ -632,7 +663,8 @@ Behaviour:
 - =C-g= goes back one level, and closes the leader at the top level, as in Emacs.
   =Esc= and =C-[= close it from any level. =SPC= is not bound in menus; in a mode
   keymap it is an undefined key like any other.
-- Like Emacs prefixes, there is no idle timeout.
+- Like Emacs prefixes, there is no idle timeout, except after a repeatable key
+  (e.g. EMMS's =a m e n=), which closes the keymap after 2 seconds.
 - Menu commands rely on the app's reported menu state, which can be stale for
   about 0.5 s after the app becomes frontmost. A command fired in that window
   may show "Unavailable now".

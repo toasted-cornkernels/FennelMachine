@@ -188,6 +188,11 @@ Short answers go to the echo area, long ones to the help viewer (lib/help.fnl).
                     (walk sub keys (concat path [(clean-title item.title)]))))
                 (table.insert acc (leaf-entry keys path item)))))))
     (when chord (walk (leader-root) chord []))
+    ;; The local leader opens the frontmost app's mode keymap.
+    (let [local-chord (leader-chord local-leader-action)
+          menu (and local-chord (modes.local-leader true))]
+      (when menu
+        (walk menu local-chord ["Mode"])))
     acc))
 
 (fn hotkey-entry [record]
@@ -474,8 +479,8 @@ Short answers go to the echo area, long ones to the help viewer (lib/help.fnl).
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (fn other-mode-entries []
-  "Leader keys of the modes of apps that are not frontmost."
-  (let [chord (leader-chord)
+  "Local leader keys of the modes of apps that are not frontmost."
+  (let [chord (leader-chord local-leader-action)
         front (hs.application.frontmostApplication)
         bundle-id (and front (: front :bundleID))
         acc []]
@@ -492,7 +497,7 @@ Short answers go to the echo area, long ones to the help viewer (lib/help.fnl).
                                                   (?. command :title)
                                                   node.command (?. command :fn))
                                     (tset :context (.. "in " mode.title)))))))))
-        (walk (or mode.keymap []) (.. chord " m"))))
+        (walk (or mode.keymap []) chord)))
     acc))
 
 (fn where-is-candidates [menus]
