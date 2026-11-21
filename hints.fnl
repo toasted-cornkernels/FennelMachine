@@ -12,6 +12,8 @@ API. Typing a label acts on the element:
   Ctrl + last      double click
   Alt + last       move the pointer there without clicking
   DEL              delete the last typed character
+  Shift-P          park: stay in hint mode after each action, e.g. to
+                   Cmd-click several files; Shift-P again leaves
   /                switch to `search`
   ESC / C-g        cancel
 
@@ -36,7 +38,8 @@ selected one, with the same modifiers as above.
 (local max-windows 10)
 
 ;; Hammerspoon reads hex colours as Generic RGB; see lib/which-key.fnl.
-(local palette {:bg "#bf90f5" :fg "#161623" :typed "#6f4e99" :border "#161623"})
+(local palette {:bg "#bf90f5" :fg "#161623" :typed "#6f4e99" :border "#161623"
+                :parked "#f5c890"})
 (local font-size 16)
 (local pad-x 5)
 (local pad-y 2)
@@ -122,11 +125,19 @@ selected one, with the same modifiers as above.
        {:AXIncrementArrow true :AXDecrementArrow true
         :AXIncrementPage true :AXDecrementPage true})
 
+(fn focusable? [element]
+  (let [(ok settable) (pcall #(: element :isAttributeSettable :AXFocused))]
+    (and ok settable)))
+
 (fn clickable? [element role subrole in-row?]
   (if (. skipped-subroles subrole) false
       ;; Table cells are reachable through their row; free-standing cells
       ;; (e.g. Chromium grids) are not.
       (= role :AXCell) (not in-row?)
+      ;; A row's text that can't take focus is just its label, such as a file
+      ;; name in Finder's list view, and the row already has a hint.
+      (and in-row? (or (= role :AXTextField) (= role :AXTextArea)))
+      (focusable? element)
       ;; Finder icon view items are images with an Open action.
       (= role :AXImage) (has-action? element [:AXOpen :AXPress])
       (. clickable-roles role) true
@@ -441,7 +452,9 @@ selected one, with the same modifiers as above.
                               {:type :rectangle
                                :frame local-frame
                                :roundedRectRadii {:xRadius 3 :yRadius 3}
-                               :fillColor {:hex palette.bg}
+                               :fillColor {:hex (if state.parked?
+                                                    palette.parked
+                                                    palette.bg)}
                                :strokeColor {:hex palette.border :alpha 0.6}
                                :strokeWidth 1})
                 (table.insert elements
@@ -479,6 +492,25 @@ selected one, with the same modifiers as above.
       (: canvas :delete))
     (set state nil)))
 
+(fn label! [candidates]
+  (let [labels (make-labels (length candidates))]
+    (each [i c (ipairs candidates)]
+      (set c.label (. labels i)))))
+
+(local refresh-delay 0.3)
+
+(fn refresh [shown]
+  "Relabel what is on screen now that an action may have changed it, unless
+  the next label is already being typed."
+  (when (and (= state shown) (= state.typed ""))
+    (let [candidates (collect-candidates)]
+      (if (= (length candidates) 0)
+          (hide-hints)
+          (do
+            (label! candidates)
+            (set state.hints candidates)
+            (render))))))
+
 (fn type-char [char flags]
   (let [previous state.typed]
     (set state.typed (.. previous char))
@@ -486,8 +518,15 @@ selected one, with the same modifiers as above.
       (if (= (length hints) 0) (set state.typed previous)
           (and (= (length hints) 1) (= (. hints 1 :label) state.typed))
           (let [hint (. hints 1)]
-            (hide-hints)
-            (activate-hint hint flags))
+            (if state.parked?
+                (let [shown state]
+                  (set state.typed "")
+                  (render)
+                  (activate-hint hint flags)
+                  (hs.timer.doAfter refresh-delay #(refresh shown)))
+                (do
+                  (hide-hints)
+                  (activate-hint hint flags))))
           (render)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -663,6 +702,17 @@ selected one, with the same modifiers as above.
         (and flags.cmd flags.shift)
         (do (hide-hints) false)
         (= key "/") (do (hide-hints) (search) true)
+        ;; p is a hint character, so Shift-P only parks between labels;
+        ;; mid-label it is still a right click.
+        (and (= key :p) flags.shift (not flags.alt) (not flags.ctrl)
+             (= state.typed ""))
+        (if state.parked?
+            (do (hide-hints) true)
+            (do
+              (set state.parked? true)
+              (set state.typed "")
+              (render)
+              true))
         (= key :delete)
         (do
           (set state.typed (state.typed:sub 1 -2))
@@ -672,11 +722,6 @@ selected one, with the same modifiers as above.
         (do (type-char key flags) true)
         (= key :space) true
         (do (hide-hints) false))))
-
-(fn label! [candidates]
-  (let [labels (make-labels (length candidates))]
-    (each [i c (ipairs candidates)]
-      (set c.label (. labels i)))))
 
 (local rescan-interval 0.25)
 (local rescan-limit 12)

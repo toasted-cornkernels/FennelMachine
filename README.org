@@ -21,6 +21,8 @@ menu items and a visible Dock. Type a label to act on it:
 | =Cmd= + last char    | Cmd-click, e.g. open a link in a new tab                  |
 | =Ctrl= + last char   | double click                                              |
 | =Alt= + last char    | move the pointer there without clicking                   |
+| =Shift-P=            | park: labels turn peach and stay after each action (e.g.  |
+|                      | =Cmd= + labels to select several files); =Shift-P= leaves |
 | =/=                  | switch to the minibuffer search (=Ctrl-Alt-SPC=, below)   |
 | =DEL=                | delete the last typed character                           |
 | =ESC=, =C-g=, hotkey | cancel; any other key cancels and goes through            |
