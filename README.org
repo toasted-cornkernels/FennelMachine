@@ -26,39 +26,59 @@ included. Transparent overlay windows, like the full-screen one Notification
 Center puts up while an alert is showing, only hide what they actually paint.
 Type a label to act on it:
 
-| Key                  | Action                                                    |
-|----------------------+-----------------------------------------------------------|
-| label                | click (=AXPress= for buttons, links, menus; else a click) |
-| =Shift= + last char  | right click                                               |
-| =Cmd= + last char    | Cmd-click, e.g. open a link in a new tab                  |
-| =Ctrl= + last char   | double click                                              |
-| =Alt= + last char    | move the pointer there without clicking                   |
-| =Shift-P=            | park: labels turn peach and stay after each action (e.g.  |
-|                      | =Cmd= + labels to select several files); =Shift-P= leaves |
-| =/=                  | switch to the minibuffer search (=Ctrl-Alt-SPC=, below)   |
-| =DEL=                | delete the last typed character                           |
-| =ESC=, =C-g=, hotkey | cancel; any other key cancels and goes through            |
+| Key                      | Action                                                    |
+|--------------------------+-----------------------------------------------------------|
+| label                    | click (=AXPress= for buttons, links, menus; else a click) |
+| modifiers + last char    | click with those modifiers held, e.g. =Cmd= opens a link  |
+|                          | in a new tab, =Cmd-Shift= in a new front tab              |
+| =r= before the last char | right click                                               |
+| =t= before the last char | double click                                              |
+| =h= before the last char | press and hold (0.5s), e.g. Safari's speaker button menu  |
+|                          | with "Enter Picture in Picture"                           |
+| =v= before the last char | move the pointer there without clicking                   |
+| =Shift-P=                | park: labels turn peach and stay after each action (e.g.  |
+|                          | =Cmd= + labels to select several files); =Shift-P= leaves |
+| =/=                      | switch to the minibuffer search (=Ctrl-Alt-SPC=, below)   |
+| =DEL=                    | delete the last typed character                           |
+| =ESC=, =C-g=, hotkey     | cancel; any other key cancels and goes through            |
+
+The action keys combine with modifiers (=r= then =Cmd= + the last char is a
+Cmd right click); typing one again goes back to a plain click. At the start of a
+label, a modified key bound as a Hammerspoon hotkey, e.g. =Cmd-Shift-J=, closes
+the hints and goes through; past the start, a modified label character is part of
+the label.
 
 While hints are shown, a small HUD in the bottom right corner of the main screen
-lists these bindings in Emacs notation (=S-key= is Shift + the last character);
-its title turns peach while parked. Labels are drawn over it, so elements behind
-it can still be picked.
+lists these bindings; its title names the chosen action and turns peach while
+parked. Labels are drawn over it, so elements behind it can still be picked.
 
 Synthetic clicks are posted with exactly the intended modifiers (keys still held
 from the hotkey are ignored), and the pointer is put back afterwards.
 Clicking an element in a background window focuses that window first.
 
-=Cmd-Shift-J= outlines the focused window's scroll areas, largest first:
+=Cmd-Shift-J= (also from hint mode) labels every visible scroll area on screen,
+in panels and in all windows, so a panel of a background window can be scrolled
+without focusing it. The focused window's largest area is selected first.
 
 | Key                       | Action                                   |
 |---------------------------+------------------------------------------|
+| an area's label           | select that area                         |
 | =h= =j= =k= =l= (held)    | scroll smoothly; hold =Shift= for faster |
 | =d= / =u=                 | half a page down / up                    |
 | =gg= / =G=                | top / bottom                             |
-| =TAB=, =S-TAB=, =1=-=9=   | pick another scroll area                 |
+| =TAB=, =S-TAB=            | next / previous area                     |
+| =DEL=                     | delete a typed label key                 |
 | =ESC=, =C-g=, =q=, hotkey | leave                                    |
 
-Scroll events are posted at the area's location, so the pointer doesn't move.
+Labels leave out the scroll keys, and a HUD in the bottom right lists the
+bindings. A window exposing no scroll areas (some Electron apps) is scrolled as
+a whole. Browsers report CSS-scrolled panels, such as a web app's sidebar, as
+plain groups, so in web content ARIA landmarks (main, navigation,
+complementary) and elements whose class names say they scroll (Tailwind's
+=overflow-y-auto= and the like) count as areas too. They count only if they fit
+inside the page: a section taller than the view scrolls with the page. Of
+nested areas, the outer is dropped when its center lies in the inner. Scroll
+events are posted at the area's center, so the pointer doesn't move.
 
 Limitations: apps that expose little through Accessibility (games, some
 cross-platform toolkits) get few or no hints. Browsers and Electron apps build

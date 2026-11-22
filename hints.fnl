@@ -4,13 +4,15 @@ Homerow / Vimium style keyboard hints for macOS.
 `show-hints` labels the clickable elements on screen (the windows, panels of
 menu-bar apps such as the emoji picker, the frontmost app's menu bar, status
 menus and the Dock) with short home-row labels found through the Accessibility
-API. Typing a label acts on the element:
+API. Typing a label clicks the element (AXPress when the element supports it
+and no modifier is held). Modifiers held on its last key are held for the
+click, e.g. Cmd to open a link in a new tab. Before the last key:
 
-  label            click (AXPress when the element supports it)
-  Shift + last     right click
-  Cmd + last       Cmd-click, e.g. open a link in a new tab
-  Ctrl + last      double click
-  Alt + last       move the pointer there without clicking
+  r                right click
+  t                double click
+  h                press and hold, e.g. for a button's menu
+  v                move the pointer there without clicking
+                   (the same key again goes back to a click)
   DEL              delete the last typed character
   Shift-P          park: stay in hint mode after each action, e.g. to
                    Cmd-click several files; Shift-P again leaves
@@ -22,8 +24,9 @@ Synthetic clicks put the pointer back where it was.
 
 `search` is a Shortcat style alternative in the minibuffer (lib/minibuffer.fnl):
 type part of the text of anything clickable on screen, a window title or a menu
-item of the frontmost app. Matches on screen are outlined; RET acts on the
-selected one, with the same modifiers as above.
+item of the frontmost app. Matches on screen are outlined; RET clicks the
+selected one, S-RET right clicks, s-RET Cmd-clicks, C-RET double clicks and
+M-RET hovers.
 "
 
 (local minibuffer (require :lib.minibuffer))
@@ -281,7 +284,8 @@ selected one, with the same modifiers as above.
             (let [shown (and visible (not (degenerate? frame))
                              (uncovered visible occluders))]
               (when (and (shown-enough? shown frame)
-                         ((or pick? clickable?) element role subrole in-row?))
+                         ((or pick? clickable?) element role subrole in-row?
+                                                in-web?))
                 (table.insert acc {: element : role : subrole :frame shown
                                    : window :web? in-web?})))
             (when (and pid budget.web-pids (= role :AXWebArea))
@@ -525,10 +529,11 @@ selected one, with the same modifiers as above.
 ;; Labels
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(fn make-labels [n]
+(fn make-labels [n ?chars]
   "N prefix-free labels as short as possible, using Vimium's scheme: keep
-  expanding the oldest label by every hint character until there are enough."
-  (let [chars (icollect [c (hint-chars:gmatch ".")] c)
+  expanding the oldest label by every character of ?CHARS (default
+  `hint-chars`) until there are enough."
+  (let [chars (icollect [c (: (or ?chars hint-chars) :gmatch ".")] c)
         labels [""]]
     (var offset 1)
     (while (or (< (- (length labels) offset -1) n) (= (length labels) 1))
@@ -553,50 +558,80 @@ selected one, with the same modifiers as above.
         :AXPopUpButton true :AXMenuButton true :AXDisclosureTriangle true
         :AXMenuBarItem true :AXMenuItem true :AXDockItem true})
 
-(fn click [point {: button : mods : count}]
+;; A press this long opens e.g. the menu of Safari's speaker button; released
+;; much later (about a second), the menu closes again.
+(local hold-time 0.5)
+(var release-timer nil)
+
+(fn click [point {: button : mods : count : hold}]
   "Post a synthetic click at POINT with exactly MODS held, regardless of the
-  keys physically down, then put the pointer back."
+  keys physically down, then put the pointer back. HOLD keeps the button down
+  that many seconds, a long press."
   (let [saved (hs.mouse.absolutePosition)
         right? (= button :right)
         down-type (if right? types.rightMouseDown types.leftMouseDown)
         up-type (if right? types.rightMouseUp types.leftMouseUp)
-        click-state hs.eventtap.event.properties.mouseEventClickState]
-    (for [n 1 (or count 1)]
-      (let [down (hs.eventtap.event.newMouseEvent down-type point (or mods []))
-            up (hs.eventtap.event.newMouseEvent up-type point (or mods []))]
-        (: down :setProperty click-state n)
-        (: up :setProperty click-state n)
-        (: down :post)
-        (hs.timer.usleep 15000)
-        (: up :post)))
-    (hs.timer.doAfter 0.05 #(hs.mouse.absolutePosition saved))))
+        click-state hs.eventtap.event.properties.mouseEventClickState
+        event (fn [type n]
+                (doto (hs.eventtap.event.newMouseEvent type point (or mods []))
+                  (: :setProperty click-state n)))
+        restore #(hs.timer.doAfter 0.05 #(hs.mouse.absolutePosition saved))]
+    (if hold
+        (do
+          (: (event down-type 1) :post)
+          (set release-timer
+               (hs.timer.doAfter hold
+                                 #(do (: (event up-type 1) :post)
+                                      (set release-timer nil)
+                                      (restore)))))
+        (do
+          (for [n 1 (or count 1)]
+            (: (event down-type n) :post)
+            (hs.timer.usleep 15000)
+            (: (event up-type n) :post))
+          (restore)))))
 
 (fn press [element]
   (let [(ok result) (pcall #(: element :performAction :AXPress))]
     (and ok result)))
 
-(fn perform [hint mods]
-  (let [point (center hint.frame)]
-    (if mods.alt (hs.mouse.absolutePosition point)
-        mods.shift (click point {:button :right})
-        mods.cmd (click point {:mods [:cmd]})
-        mods.ctrl (click point {:count 2})
-        (and (or (. press-roles hint.role) (. notification-subroles hint.subrole))
-             (press hint.element))
-        nil
-        (click point {}))))
+(local click-modifiers [:cmd :shift :alt :ctrl])
 
-(fn activate-hint [hint mods]
+(fn held-modifiers [flags]
+  (icollect [_ m (ipairs click-modifiers)] (when (. flags m) m)))
+
+;; Keys typed before a label's last key to do something other than click.
+(local hint-actions {:r :right :t :double :h :hold :v :hover})
+(local action-names {:right "right click" :double "double click"
+                     :hold "press and hold" :hover "hover"})
+
+(fn perform [hint action flags]
+  "Do ACTION (nil to click) on HINT with the modifiers in FLAGS held. A plain
+  click on a button presses it through Accessibility instead."
+  (let [point (center hint.frame)
+        mods (held-modifiers flags)]
+    (case action
+      :hover (hs.mouse.absolutePosition point)
+      :right (click point {:button :right : mods})
+      :double (click point {:count 2 : mods})
+      :hold (click point {:hold hold-time : mods})
+      _ (when (not (and (= (length mods) 0)
+                        (or (. press-roles hint.role)
+                            (. notification-subroles hint.subrole))
+                        (press hint.element)))
+          (click point {: mods})))))
+
+(fn activate-hint [hint action flags]
   "Bring the hint's window forward first: a click on an inactive window often
   only activates it, and a pressed button should end up in front."
   (let [win hint.window
         focused (hs.window.focusedWindow)]
-    (if (and win (not mods.alt)
+    (if (and win (not= action :hover)
              (not (and focused (= (: focused :id) (: win :id)))))
         (do
           (: win :focus)
-          (hs.timer.doAfter 0.15 #(perform hint mods)))
-        (perform hint mods))))
+          (hs.timer.doAfter 0.15 #(perform hint action flags)))
+        (perform hint action flags))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -664,25 +699,35 @@ selected one, with the same modifiers as above.
 (fn hud-bindings [parked?]
   [[nil "on a label's last key:"]
    ["key" "click"]
-   ["S-key" "right click"]
-   ["s-key" "Cmd-click"]
-   ["C-key" "double click"]
-   ["M-key" "hover, no click"]
+   ["mods-key" "click with those modifiers"]
+   [nil "before it, to act otherwise:"]
+   ["r" "right click"]
+   ["t" "double click"]
+   ["h" "press and hold"]
+   ["v" "hover, no click"]
    [nil ""]
    ["P" (if parked? "leave park" "park: stay after each action")]
    ["/" "search by text"]
+   ["s-J" "scroll an area instead"]
    ["DEL" "delete a typed key"]
    ["ESC C-g" "cancel"]])
 
-(fn hud-text [parked?]
-  (let [bindings (hud-bindings parked?)
-        width (accumulate [w 0 _ [key] (ipairs bindings)]
+(fn scroll-bindings []
+  [[nil "type an area's label to pick it"]
+   ["h j k l" "scroll while held"]
+   ["S-hjkl" "scroll faster"]
+   ["d u" "half a page down / up"]
+   ["gg G" "top / bottom"]
+   ["TAB S-TAB" "next / previous area"]
+   ["ESC C-g q" "leave"]])
+
+(fn hud-text [title-text title-color bindings]
+  (let [width (accumulate [w 0 _ [key] (ipairs bindings)]
                 (math.max w (length (or key ""))))
         font {:name font-name :size hud-font-size}
         styled (fn [text color]
                  (hs.styledtext.new text {: font :color {:hex color}}))
-        title (styled (if parked? "Hints (parked)\n" "Hints\n")
-                      (if parked? palette.parked hud-palette.key))]
+        title (styled (.. title-text "\n") title-color)]
     (accumulate [text title i [key desc] (ipairs bindings)]
       (let [newline (if (< i (length bindings)) "\n" "")]
         (if key
@@ -692,10 +737,10 @@ selected one, with the same modifiers as above.
                 (styled (.. desc newline) hud-palette.fg))
             (.. text (styled (.. desc newline) hud-palette.dim)))))))
 
-(fn hud-elements [canvas-frame screen-frame parked?]
-  "Canvas elements for the HUD in the bottom right corner of SCREEN-FRAME,
-  the usable part of the screen CANVAS-FRAME covers."
-  (let [text (hud-text parked?)
+(fn hud-elements [canvas-frame screen-frame title-text title-color bindings]
+  "Canvas elements for a HUD listing BINDINGS in the bottom right corner of
+  SCREEN-FRAME, the usable part of the screen CANVAS-FRAME covers."
+  (let [text (hud-text title-text title-color bindings)
         size (hs.drawing.getTextDrawingSize text)
         w (+ (math.ceil size.w) (* 2 hud-pad-x))
         h (+ (math.ceil size.h) (* 2 hud-pad-y))
@@ -716,7 +761,15 @@ selected one, with the same modifiers as above.
   (let [visible (visible-hints)]
     (each [_ {: canvas : frame : screen} (ipairs state.canvases)]
       (let [elements (if (= (: screen :id) state.hud-screen)
-                         (hud-elements frame (: screen :frame) state.parked?)
+                         (hud-elements frame (: screen :frame)
+                                       (.. (if state.parked? "Hints (parked)" "Hints")
+                                           (if state.action
+                                               (.. ": " (. action-names state.action))
+                                               ""))
+                                       (if state.parked?
+                                           palette.parked
+                                           hud-palette.key)
+                                       (hud-bindings state.parked?))
                          [])]
         (each [_ hint (ipairs visible)]
           (let [r (label-rect hint)]
@@ -792,16 +845,18 @@ selected one, with the same modifiers as above.
     (let [hints (visible-hints)]
       (if (= (length hints) 0) (set state.typed previous)
           (and (= (length hints) 1) (= (. hints 1 :label) state.typed))
-          (let [hint (. hints 1)]
+          (let [hint (. hints 1)
+                action state.action]
             (if state.parked?
                 (let [shown state]
                   (set state.typed "")
+                  (set state.action nil)
                   (render)
-                  (activate-hint hint flags)
+                  (activate-hint hint action flags)
                   (hs.timer.doAfter refresh-delay #(refresh shown)))
                 (do
                   (hide-hints)
-                  (activate-hint hint flags))))
+                  (activate-hint hint action flags))))
           (render)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -933,11 +988,22 @@ selected one, with the same modifiers as above.
           (when (> (length elements) 0)
             (: canvas :replaceElements elements)))))))
 
+(fn search-action [flags]
+  "The action and modifiers RET with FLAGS stands for in `search`, which has
+  no keys to spare for actions: S-RET right click, s-RET Cmd-click, C-RET
+  double click, M-RET hover."
+  (if flags.alt (values :hover {})
+      flags.shift (values :right {})
+      flags.cmd (values nil {:cmd true})
+      flags.ctrl (values :double {})
+      (values nil {})))
+
 (fn accept-search [candidate input flags]
   (hide-search-overlay)
   (if (not candidate)
       (when (not= input "") (minibuffer.message (.. "No match for " input)))
-      (= candidate.kind :element) (activate-hint candidate.hint flags)
+      (= candidate.kind :element)
+      (activate-hint candidate.hint (search-action flags))
       (= candidate.kind :menu)
       (when (not (press candidate.element))
         (minibuffer.message (.. "Could not choose " candidate.text)))
@@ -946,7 +1012,7 @@ selected one, with the same modifiers as above.
 (fn search []
   "Shortcat style search in the minibuffer: type part of the text of anything
   clickable on screen, a window title or a menu item of the frontmost app; RET
-  acts on the selection with the same modifiers as hint labels."
+  acts on the selection, as `search-action` describes."
   (hide-hints)
   (hide-search-overlay)
   (set search-canvases (make-canvases))
@@ -959,11 +1025,24 @@ selected one, with the same modifiers as above.
                     #(when (minibuffer.active?)
                        (minibuffer.set-collection (search-candidates)))))
 
+(local modifier-symbols [[:cmd "⌘"] [:ctrl "⌃"] [:alt "⌥"] [:shift "⇧"]])
+
+(fn hotkey? [key flags]
+  "Whether KEY with the modifiers in FLAGS is a Hammerspoon hotkey."
+  (and key (or flags.cmd flags.ctrl flags.alt)
+       (let [idx (.. (table.concat (icollect [_ [m symbol] (ipairs modifier-symbols)]
+                                     (when (. flags m) symbol)))
+                     (key:upper))]
+         (any? #(= $.idx idx) (hs.hotkey.getHotkeys)))))
+
 (fn on-key [event]
-  "Swallow the keys used for hints; any other key closes the hints and goes
-  through, so e.g. Cmd-Tab or Cmd-Shift-J (scroll mode) still work."
+  "Type a label or an action key; any other key closes the hints and goes
+  through, so e.g. Cmd-Tab still works. At the start of a label, a key bound as
+  a Hammerspoon hotkey, e.g. Cmd-Shift-J (scroll mode), goes through as well;
+  past it, a modified label key is a modified click."
   (let [key (. hs.keycodes.map (: event :getKeyCode))
         flags (: event :getFlags)
+        plain? (not (or flags.cmd flags.ctrl flags.alt flags.shift))
         autorepeat? (= 1 (: event :getProperty
                             hs.eventtap.event.properties.keyboardEventAutorepeat))]
     (if (or (= key :escape) (and flags.ctrl (= key :g)))
@@ -972,15 +1051,18 @@ selected one, with the same modifiers as above.
         ;; opening them, its space auto-repeats and is ignored.
         (and flags.cmd (= key :space))
         (do (when (not autorepeat?) (hide-hints)) true)
-        ;; Cmd + a label character is a Cmd-click, but other Cmd shortcuts
-        ;; (with Shift) belong to the system.
-        (and flags.cmd flags.shift)
+        (and (= state.typed "") (hotkey? key flags))
         (do (hide-hints) false)
         (= key "/") (do (hide-hints) (search) true)
+        (and plain? (. hint-actions key))
+        (let [action (. hint-actions key)]
+          (set state.action (if (= state.action action) nil action))
+          (render)
+          true)
         ;; p is a hint character, so Shift-P only parks between labels;
-        ;; mid-label it is still a right click.
+        ;; mid-label it is still a Shift-click.
         (and (= key :p) flags.shift (not flags.alt) (not flags.ctrl)
-             (= state.typed ""))
+             (not flags.cmd) (= state.typed ""))
         (if state.parked?
             (do (hide-hints) true)
             (do
@@ -1072,26 +1154,102 @@ selected one, with the same modifiers as above.
     (: event :location point)
     (: event :post)))
 
+;; Labels for scroll areas leave out the keys scroll mode uses.
+(local scroll-label-chars "asfewrcmnpioty")
+(local min-area {:w 80 :h 60})
+
+(fn big-enough? [frame]
+  (and frame (>= frame.w min-area.w) (>= frame.h min-area.h)))
+
+(local web-panel-subroles {:AXLandmarkMain true
+                           :AXLandmarkNavigation true
+                           :AXLandmarkComplementary true})
+
+(fn scroller-class? [class]
+  (let [class (class:lower)]
+    (or (class:match "^overflow%-auto$") (class:match "^overflow%-scroll$")
+        (class:match "^overflow%-[xy]%-auto$")
+        (class:match "^overflow%-[xy]%-scroll$")
+        (class:match "scrollable") (class:match "scroller")
+        (class:match "scroll%-container") (class:match "scroll%-area"))))
+
+(fn scroll-area? [element role subrole _ in-web?]
+  "Scroll areas, and in web content the panels that may scroll on their own:
+  browsers expose an element with CSS overflow scrolling as a plain group, so
+  landmarks and elements whose class names say they scroll stand in for them."
+  (or (= role :AXScrollArea)
+      (and in-web? (= role :AXGroup)
+           (or (. web-panel-subroles subrole)
+               (any? scroller-class? (or (attr element :AXDOMClassList) []))))))
+
+(fn distinct-areas [areas]
+  "Drop web panels that scroll with their page, being taller than or not
+  fully inside it, and landmarks too short to be a panel. Of nested areas,
+  drop the outer if its center, where it is scrolled, lies in the inner."
+  (let [pages (icollect [_ a (ipairs areas)]
+                (when (= a.role :AXScrollArea) (attr a.element :AXFrame)))
+        fits? (fn [a]
+                (or (= a.role :AXScrollArea)
+                    (let [frame (attr a.element :AXFrame)
+                          slack {:x (- frame.x 1) :y (- frame.y 1)
+                                 :w (- frame.w 2) :h (- frame.h 2)}]
+                      (any? #(and (contains? $ slack)
+                                  (or (not (. web-panel-subroles a.subrole))
+                                      (>= frame.h (* 0.4 $.h))))
+                            pages))))
+        kept (icollect [_ a (ipairs areas)] (when (fits? a) a))]
+    ;; Collected in tree order, an inner area comes after its outer one.
+    (icollect [i a (ipairs kept)]
+      (when (not (any? (fn [[j b]]
+                         (and (not= i j) (contains? a.frame b.frame)
+                              (or (< i j) (not (contains? b.frame a.frame)))
+                              (inside? b.frame (center a.frame))))
+                       (icollect [j b (ipairs kept)] [j b])))
+        a))))
+
 (fn scroll-areas []
-  "Visible scroll areas of the focused window, largest first. Falls back to
-  the window itself when it exposes none, e.g. some Electron apps."
-  (let [win (hs.window.focusedWindow)
-        clip (and win (on-screen-frame (: win :frame)))]
-    (if (not clip) []
-        (let [acc []
-              budget {:visited 0 :deadline (+ (now) time-budget-ns)}]
-          (collect-tree (hs.axuielement.windowElement win)
-                        {: clip :occluders [] :window win} acc budget
-                        #(= $2 :AXScrollArea))
-          (let [areas (icollect [_ a (ipairs acc)]
-                        (when (and (>= a.frame.w 80) (>= a.frame.h 60)) a))]
-            (table.sort areas #(> (* $1.frame.w $1.frame.h)
-                                  (* $2.frame.w $2.frame.h)))
-            (if (= (length areas) 0) [{:frame clip :window win}] areas))))))
+  "The visible parts of every scroll area on screen, in panels and in all
+  windows, including web panels that scroll on their own: the focused
+  window's first, then front to back, each window's largest first. A window
+  exposing none, e.g. some Electron apps, is scrolled as a whole."
+  (let [budget {:visited 0 :deadline (+ (now) time-budget-ns)}
+        clip (screen-clip)
+        (panels floating) (panel-roots clip)
+        focused (hs.window.focusedWindow)
+        focused-id (and focused (: focused :id))
+        roots (icollect [_ p (ipairs panels)] p)
+        groups []]
+    (each [_ root (ipairs (window-roots floating))]
+      (table.insert roots root))
+    (each [_ root (ipairs roots)]
+      (let [acc []]
+        (collect-tree root.element root acc budget scroll-area?)
+        (let [areas (icollect [_ a (ipairs (distinct-areas acc))]
+                      (when (big-enough? a.frame)
+                        (doto a (tset :window root.window))))
+              whole (when (and root.window (= (length areas) 0))
+                      (uncovered root.clip root.occluders))]
+          (table.sort areas #(> (* $1.frame.w $1.frame.h)
+                                (* $2.frame.w $2.frame.h)))
+          (when (big-enough? whole)
+            (table.insert areas {:frame whole :window root.window}))
+          (if (and focused-id root.window (= (: root.window :id) focused-id))
+              (table.insert groups 1 areas)
+              (table.insert groups areas)))))
+    (let [result []]
+      (each [_ areas (ipairs groups)]
+        (each [_ a (ipairs areas)]
+          (table.insert result a)))
+      (each [i label (ipairs (make-labels (length result) scroll-label-chars))]
+        (tset result i :label label))
+      result)))
 
 (fn render-scroll []
-  (each [_ {: canvas : frame} (ipairs state.canvases)]
-    (let [elements []]
+  (each [_ {: canvas : frame : screen} (ipairs state.canvases)]
+    (let [elements (if (= (: screen :id) state.hud-screen)
+                       (hud-elements frame (: screen :frame) "Scroll"
+                                     hud-palette.key (scroll-bindings))
+                       [])]
       (each [i area (ipairs state.areas)]
         (let [f area.frame
               local-frame {:x (- f.x frame.x) :y (- f.y frame.y) :w f.w :h f.h}]
@@ -1105,8 +1263,9 @@ selected one, with the same modifiers as above.
                              :roundedRectRadii {:xRadius 6 :yRadius 6}
                              :strokeColor {:hex palette.bg}
                              :strokeWidth 3}))
-            (when (> (length state.areas) 1)
-              (let [w (+ char-size.w (* 2 pad-x))
+            (when (and (> (length state.areas) 1)
+                       (= (area.label:sub 1 (length state.typed)) state.typed))
+              (let [w (+ (* (length area.label) char-size.w) (* 2 pad-x))
                     h (+ char-size.h (* 2 pad-y))
                     x (+ local-frame.x 8)
                     y (+ local-frame.y 8)]
@@ -1121,7 +1280,7 @@ selected one, with the same modifiers as above.
                 (table.insert elements
                               {:type :text
                                :frame {: x :y (+ y pad-y) : w :h (- h pad-y)}
-                               :text (label-text (tostring i) "")}))))))
+                               :text (label-text area.label state.typed)}))))))
       (: canvas :replaceElements elements))))
 
 (fn stop-scrolling []
@@ -1151,6 +1310,19 @@ selected one, with the same modifiers as above.
   (when (. state.areas index)
     (stop-scrolling)
     (set state.index index)
+    (set state.typed "")
+    (render-scroll)))
+
+(fn type-area-char [char]
+  "Narrow the area labels by CHAR; a complete label selects its area."
+  (let [typed (.. state.typed char)
+        matches (icollect [i area (ipairs state.areas)]
+                  (when (= (area.label:sub 1 (length typed)) typed) i))]
+    (if (= (length matches) 0) (set state.typed "")
+        (and (= (length matches) 1)
+             (= (. state.areas (. matches 1) :label) typed))
+        (select-area (. matches 1))
+        (set state.typed typed))
     (render-scroll)))
 
 (fn on-scroll-key-down [key flags pending-g?]
@@ -1173,14 +1345,17 @@ selected one, with the same modifiers as above.
                            step (if flags.shift -1 1)]
                        (select-area (+ (% (+ state.index -1 step n) n) 1))
                        true)
-        (and key (or (key:match "^%d$") (key:match "^pad%d$")))
-        (do (select-area (tonumber (key:match "%d"))) true)
+        (and key (= (length key) 1) (not flags.shift)
+             (scroll-label-chars:find key 1 true))
+        (do (type-area-char key) true)
+        (= key :delete)
+        (do (set state.typed (state.typed:sub 1 -2)) (render-scroll) true)
         (do (hide-hints) false))))
 
 (fn on-scroll-key [event]
   "h/j/k/l scroll while held, d/u by half a page, gg/G to the top/bottom,
-  TAB or a number picks another area, ESC, C-g or q leaves. Other keys leave
-  scroll mode and go through."
+  TAB or an area's label picks another area, ESC, C-g or q leaves. Other keys
+  leave scroll mode and go through."
   (let [key (. hs.keycodes.map (: event :getKeyCode))
         direction (. scroll-directions key)
         autorepeat? (= 1 (: event :getProperty
@@ -1197,7 +1372,8 @@ selected one, with the same modifiers as above.
           (on-scroll-key-down key (: event :getFlags) pending-g?)))))
 
 (fn scroll-mode []
-  "Scroll the focused window's scroll areas from the keyboard."
+  "Scroll any scroll area on screen from the keyboard, starting with the
+  focused window's largest."
   (hide-hints)
   (let [areas (scroll-areas)]
     (if (= (length areas) 0)
@@ -1205,6 +1381,8 @@ selected one, with the same modifiers as above.
         (do
           (set state {:areas areas
                       :index 1
+                      :typed ""
+                      :hud-screen (: (hs.screen.mainScreen) :id)
                       :canvases (make-canvases)
                       :tap (hs.eventtap.new [types.keyDown types.keyUp]
                                             on-scroll-key)})
