@@ -17,6 +17,7 @@ API. Typing a label acts on the element:
   /                switch to `search`
   ESC / C-g        cancel
 
+A HUD in the bottom right corner of the main screen lists these bindings.
 Synthetic clicks put the pointer back where it was.
 
 `search` is a Shortcat style alternative in the minibuffer (lib/minibuffer.fnl):
@@ -651,10 +652,72 @@ selected one, with the same modifiers as above.
       (when (= (hint.label:sub 1 (length typed)) typed)
         hint))))
 
+;; The bindings HUD in the bottom right corner of the main screen. It is drawn
+;; beneath the labels, so those of elements behind it stay readable.
+(local hud-palette {:bg "#161623" :border "#343647" :fg "#c1cbf1"
+                    :key "#bf90f5" :dim "#8187a1"})
+(local hud-font-size 13)
+(local hud-margin 12)
+(local hud-pad-x 12)
+(local hud-pad-y 8)
+
+(fn hud-bindings [parked?]
+  [[nil "on a label's last key:"]
+   ["key" "click"]
+   ["S-key" "right click"]
+   ["s-key" "Cmd-click"]
+   ["C-key" "double click"]
+   ["M-key" "hover, no click"]
+   [nil ""]
+   ["P" (if parked? "leave park" "park: stay after each action")]
+   ["/" "search by text"]
+   ["DEL" "delete a typed key"]
+   ["ESC C-g" "cancel"]])
+
+(fn hud-text [parked?]
+  (let [bindings (hud-bindings parked?)
+        width (accumulate [w 0 _ [key] (ipairs bindings)]
+                (math.max w (length (or key ""))))
+        font {:name font-name :size hud-font-size}
+        styled (fn [text color]
+                 (hs.styledtext.new text {: font :color {:hex color}}))
+        title (styled (if parked? "Hints (parked)\n" "Hints\n")
+                      (if parked? palette.parked hud-palette.key))]
+    (accumulate [text title i [key desc] (ipairs bindings)]
+      (let [newline (if (< i (length bindings)) "\n" "")]
+        (if key
+            (.. text
+                (styled (.. key (string.rep " " (- width (length key))) "  ")
+                        hud-palette.key)
+                (styled (.. desc newline) hud-palette.fg))
+            (.. text (styled (.. desc newline) hud-palette.dim)))))))
+
+(fn hud-elements [canvas-frame screen-frame parked?]
+  "Canvas elements for the HUD in the bottom right corner of SCREEN-FRAME,
+  the usable part of the screen CANVAS-FRAME covers."
+  (let [text (hud-text parked?)
+        size (hs.drawing.getTextDrawingSize text)
+        w (+ (math.ceil size.w) (* 2 hud-pad-x))
+        h (+ (math.ceil size.h) (* 2 hud-pad-y))
+        x (- (+ screen-frame.x screen-frame.w) canvas-frame.x w hud-margin)
+        y (- (+ screen-frame.y screen-frame.h) canvas-frame.y h hud-margin)]
+    [{:type :rectangle
+      :frame {: x : y : w : h}
+      :roundedRectRadii {:xRadius 8 :yRadius 8}
+      :fillColor {:hex hud-palette.bg :alpha 0.92}
+      :strokeColor {:hex hud-palette.border}
+      :strokeWidth 1}
+     {:type :text
+      :frame {:x (+ x hud-pad-x) :y (+ y hud-pad-y)
+              :w (- w (* 2 hud-pad-x)) :h (- h (* 2 hud-pad-y))}
+      : text}]))
+
 (fn render []
   (let [visible (visible-hints)]
-    (each [_ {: canvas : frame} (ipairs state.canvases)]
-      (let [elements []]
+    (each [_ {: canvas : frame : screen} (ipairs state.canvases)]
+      (let [elements (if (= (: screen :id) state.hud-screen)
+                         (hud-elements frame (: screen :frame) state.parked?)
+                         [])]
         (each [_ hint (ipairs visible)]
           (let [r (label-rect hint)]
             (when (inside? frame (center r))
@@ -685,7 +748,7 @@ selected one, with the same modifiers as above.
       (: canvas :level hs.canvas.windowLevels.overlay)
       (: canvas :behavior [:canJoinAllSpaces :transient])
       (: canvas :show)
-      {: canvas : frame})))
+      {: canvas : frame : screen})))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -977,6 +1040,7 @@ selected one, with the same modifiers as above.
           (set state {:hints candidates
                       :typed ""
                       :canvases (make-canvases)
+                      :hud-screen (: (hs.screen.mainScreen) :id)
                       :tap (hs.eventtap.new [types.keyDown] on-key)})
           (render)
           (: state.tap :start)

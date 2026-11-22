@@ -39,6 +39,11 @@ Type a label to act on it:
 | =DEL=                | delete the last typed character                           |
 | =ESC=, =C-g=, hotkey | cancel; any other key cancels and goes through            |
 
+While hints are shown, a small HUD in the bottom right corner of the main screen
+lists these bindings in Emacs notation (=S-key= is Shift + the last character);
+its title turns peach while parked. Labels are drawn over it, so elements behind
+it can still be picked.
+
 Synthetic clicks are posted with exactly the intended modifiers (keys still held
 from the hotkey are ignored), and the pointer is put back afterwards.
 Clicking an element in a background window focuses that window first.
