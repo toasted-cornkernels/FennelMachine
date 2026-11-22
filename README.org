@@ -15,9 +15,16 @@ its server; ELispMachine's =init.el= starts it. If it isn't, those keys say
 
 =hints.fnl= is a Homerow / Vimium style layer built on the Accessibility API.
 =Cmd-Shift-SPC= labels every clickable element on screen: the visible parts of all
-windows (covered elements are skipped), panels of menu-bar apps such as the emoji
-picker (=Cmd-Ctrl-SPC=), the frontmost app's menu bar and any open menu, status
-menu items and a visible Dock. Type a label to act on it:
+windows (covered elements are skipped; a partly covered one is labelled and
+clicked on its visible part, which must be at least 8px each way, and a window
+in front also covers the 4px margin around it where a click would resize it;
+rows scrolled under a list's column header count as covered too), notification
+banners and alerts, panels of menu-bar apps such as
+the emoji picker (=Cmd-Ctrl-SPC=), the frontmost app's menu bar and any open menu,
+status menu items and a visible Dock. Clickable text such as Calendar events is
+included. Transparent overlay windows, like the full-screen one Notification
+Center puts up while an alert is showing, only hide what they actually paint.
+Type a label to act on it:
 
 | Key                  | Action                                                    |
 |----------------------+-----------------------------------------------------------|
@@ -50,10 +57,15 @@ Scroll events are posted at the area's location, so the pointer doesn't move.
 
 Limitations: apps that expose little through Accessibility (games, some
 cross-platform toolkits) get few or no hints. Browsers and Electron apps build
-their web accessibility tree only once it is first asked for (Electron via
-=AXManualAccessibility=), so on the first invocation in a freshly launched app
-web hints appear a moment after the rest. Context menus opened by a right click can't be hinted;
-use the arrow keys or type-ahead there.
+their web accessibility tree only once it is first asked for, so every app with
+a visible window is asked (Electron via =AXManualAccessibility=; Chromium apps
+that ignore it, such as ChatGPT, via =AXEnhancedUserInterface=, which can make
+their window move and resize animations choppy). On the first invocation in a
+freshly launched app, web hints appear a moment after the rest; labels are
+refreshed until every such app's page settles (at most 5 seconds). If a scan
+runs out of its time or element budget, the menu bar and Dock lose hints first
+and a warning is logged to the Hammerspoon console. Context menus opened by a
+right click can't be hinted; use the arrow keys or type-ahead there.
 
 ** Search (=Ctrl-Alt-SPC=) in the minibuffer, and the echo area
 

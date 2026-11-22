@@ -83,6 +83,59 @@ selected one, with the same modifiers as above.
 (fn center [rect]
   {:x (+ rect.x (/ rect.w 2)) :y (+ rect.y (/ rect.h 2))})
 
+(fn subtract [rect hole]
+  "The parts of RECT outside HOLE, as up to four rectangles."
+  (let [cut (intersection rect hole)]
+    (if (not cut) [rect]
+        (let [right (+ rect.x rect.w)
+              bottom (+ rect.y rect.h)
+              pieces [{:x rect.x :y rect.y :w rect.w :h (- cut.y rect.y)}
+                      {:x rect.x :y (+ cut.y cut.h) :w rect.w
+                       :h (- bottom cut.y cut.h)}
+                      {:x rect.x :y cut.y :w (- cut.x rect.x) :h cut.h}
+                      {:x (+ cut.x cut.w) :y cut.y :w (- right cut.x cut.w)
+                       :h cut.h}]]
+          (icollect [_ p (ipairs pieces)]
+            (when (and (> p.w 0) (> p.h 0)) p))))))
+
+(fn merge-pieces [pieces]
+  "Join pieces sharing a whole edge, which cutting by several holes leaves
+  apart, e.g. a row's strips above and beside two overlapping windows."
+  (var merged? true)
+  (while merged?
+    (set merged? false)
+    (for [i 1 (length pieces) &until merged?]
+      (for [j (+ i 1) (length pieces) &until merged?]
+        (let [a (. pieces i)
+              b (. pieces j)
+              joined (if (and (= a.x b.x) (= a.w b.w)
+                              (or (= (+ a.y a.h) b.y) (= (+ b.y b.h) a.y)))
+                         {:x a.x :y (math.min a.y b.y) :w a.w :h (+ a.h b.h)}
+                         (and (= a.y b.y) (= a.h b.h)
+                              (or (= (+ a.x a.w) b.x) (= (+ b.x b.w) a.x)))
+                         {:x (math.min a.x b.x) :y a.y :w (+ a.w b.w) :h a.h})]
+          (when joined
+            (tset pieces i joined)
+            (table.remove pieces j)
+            (set merged? true))))))
+  pieces)
+
+(fn uncovered [rect holes]
+  "The largest part of RECT outside every one of HOLES, or nil if they cover
+  it entirely, e.g. the uncovered half of a list row under another window."
+  (var pieces [rect])
+  (each [_ hole (ipairs holes)]
+    (set pieces (merge-pieces
+                 (accumulate [acc [] _ p (ipairs pieces)]
+                   (do (each [_ q (ipairs (subtract p hole))]
+                         (table.insert acc q))
+                       acc)))))
+  (var best nil)
+  (each [_ p (ipairs pieces)]
+    (when (or (not best) (> (* p.w p.h) (* best.w best.h)))
+      (set best p)))
+  best)
+
 (fn any? [pred list]
   (var found false)
   (each [_ x (ipairs list) &until found]
@@ -125,12 +178,31 @@ selected one, with the same modifiers as above.
        {:AXIncrementArrow true :AXDecrementArrow true
         :AXIncrementPage true :AXDecrementPage true})
 
+;; Notification Center's cards: pressing one opens it (or expands a stack).
+(local notification-subroles
+       {:AXNotificationCenterAlert true :AXNotificationCenterBanner true
+        :AXNotificationCenterAlertStack true
+        :AXNotificationCenterBannerStack true})
+
 (fn focusable? [element]
   (let [(ok settable) (pcall #(: element :isAttributeSettable :AXFocused))]
     (and ok settable)))
 
+(fn degenerate? [frame]
+  (or (<= frame.w 1) (<= frame.h 1)))
+
+(fn within-parent? [element]
+  (let [frame (attr element :AXFrame)
+        parent (attr element :AXParent)
+        outer (and parent (attr parent :AXFrame))]
+    (or (not frame) (not outer) (degenerate? outer)
+        (contains? {:x (- outer.x 1) :y (- outer.y 1)
+                    :w (+ outer.w 2) :h (+ outer.h 2)}
+                   frame))))
+
 (fn clickable? [element role subrole in-row?]
   (if (. skipped-subroles subrole) false
+      (. notification-subroles subrole) true
       ;; Table cells are reachable through their row; free-standing cells
       ;; (e.g. Chromium grids) are not.
       (= role :AXCell) (not in-row?)
@@ -138,6 +210,13 @@ selected one, with the same modifiers as above.
       ;; name in Finder's list view, and the row already has a hint.
       (and in-row? (or (= role :AXTextField) (= role :AXTextArea)))
       (focusable? element)
+      ;; Text that can be pressed and focused is an item, e.g. Calendar's
+      ;; events; web page text is neither. Calendar keeps the events hidden
+      ;; behind "+N more" with stale frames sticking out of their day, so the
+      ;; text must lie within its container.
+      (= role :AXStaticText)
+      (and (has-action? element [:AXPress]) (focusable? element)
+           (within-parent? element))
       ;; Finder icon view items are images with an Open action.
       (= role :AXImage) (has-action? element [:AXOpen :AXPress])
       (. clickable-roles role) true
@@ -145,43 +224,100 @@ selected one, with the same modifiers as above.
 
 (fn now [] (hs.timer.absoluteTime))
 
+(local min-shown 8)
+
+(fn shown-enough? [shown frame]
+  "Whether SHOWN, the part of FRAME that is scrolled into view and uncovered,
+  is big enough to label: at least `min-shown` each way, or half of a smaller
+  element, so that a sliver of a row at the edge of a list is not."
+  (and shown
+       (>= shown.w (math.min min-shown (/ frame.w 2)))
+       (>= shown.h (math.min min-shown (/ frame.h 2)))))
+
+(local table-roles {:AXTable true :AXOutline true})
+
+(fn header-extent [table-element]
+  "The area TABLE-ELEMENT's column header covers, if it has one. Finder's
+  header is a zero-height group whose buttons float over the rows."
+  (let [header (attr table-element :AXHeader)
+        frame (and header (attr header :AXFrame))]
+    (when frame
+      (let [rects (icollect [_ child (ipairs (or (attr header :AXChildren) []))]
+                    (attr child :AXFrame))]
+        (when (not (degenerate? frame))
+          (table.insert rects frame))
+        (when (> (length rects) 0)
+          (let [b (bounds rects)
+                x1 (math.min b.x frame.x)
+                x2 (math.max (+ b.x b.w) (+ frame.x frame.w))]
+            (values header {:x x1 :y b.y :w (- x2 x1) :h b.h})))))))
+
 (fn collect-tree [root {: clip : occluders : window} acc budget pick?]
   "Walk ROOT's accessibility tree and append a candidate to ACC for every
-  element satisfying PICK? (default `clickable?`) that is visible: inside CLIP (narrowed by each enclosing
-  scroll area) and not under one of the OCCLUDERS, the frames of windows in
-  front. Subtrees that are scrolled out, collapsed to Chromium's 1px frames or
-  fully covered by another window are skipped."
-  (fn visit [element clip in-row?]
-    (set budget.visited (+ budget.visited 1))
-    (when (and (< budget.visited max-visited) (< (now) budget.deadline))
-      (let [role (attr element :AXRole)
-            frame (attr element :AXFrame)
-            visible (and frame (intersection frame clip))]
-        (when (or (= frame nil)
-                  (and visible (> frame.w 1) (> frame.h 1)
-                       (not (any? #(contains? $ visible) occluders))))
-          (when (and visible
-                     ((or pick? clickable?) element role
-                                            (attr element :AXSubrole) in-row?)
-                     (not (any? #(inside? $ (center visible)) occluders)))
-            (table.insert acc {: element : role :frame visible : window}))
-          ;; A menu bar item's menu is only worth walking while it is open.
-          (when (or (not (. leaf-roles role))
-                    (and (= role :AXMenuBarItem) (attr element :AXSelected)))
-            (let [clip (if (and visible (= role :AXScrollArea)) visible clip)
-                  in-row? (or in-row? (= role :AXRow))]
-              (each [_ child (ipairs (or (attr element :AXChildren) []))]
-                (visit child clip in-row?))))))))
-  (visit root clip false))
+  element satisfying PICK? (default `clickable?`) that is visible: inside CLIP
+  (narrowed by each enclosing scroll area) and not entirely under the
+  OCCLUDERS, the frames of windows in front, or under the column header of
+  its table, which rows scroll beneath. A partly covered element is labelled
+  on its largest uncovered part. Subtrees that are scrolled out or
+  fully covered by another window are skipped, and so are those of Chromium's
+  collapsed 1px elements; a single zero-size layer is walked through, though,
+  such as the header of Finder's list view, which holds its column buttons.
+  The pids of apps showing web content are recorded in BUDGET.web-pids, and
+  candidates inside it are marked `web?`."
+  (let [pid (and window (: window :pid))]
+    (fn visit [element clip occluders in-row? in-web? thin?]
+      (set budget.visited (+ budget.visited 1))
+      (when (and (< budget.visited max-visited) (< (now) budget.deadline))
+        (let [role (attr element :AXRole)
+              subrole (attr element :AXSubrole)
+              frame (attr element :AXFrame)
+              visible (and frame (intersection frame clip))
+              pass-through? (and frame (degenerate? frame) (not thin?)
+                                 (inside? clip frame))]
+          (when (or (= frame nil) pass-through?
+                    (and visible (not (degenerate? frame))
+                         (not (any? #(contains? $ visible) occluders))))
+            (let [shown (and visible (not (degenerate? frame))
+                             (uncovered visible occluders))]
+              (when (and (shown-enough? shown frame)
+                         ((or pick? clickable?) element role subrole in-row?))
+                (table.insert acc {: element : role : subrole :frame shown
+                                   : window :web? in-web?})))
+            (when (and pid budget.web-pids (= role :AXWebArea))
+              (tset budget.web-pids pid true))
+            ;; A menu bar item's menu is only worth walking while it is open.
+            (when (or (not (. leaf-roles role))
+                      (and (= role :AXMenuBarItem) (attr element :AXSelected)))
+              (let [clip (if (and visible (= role :AXScrollArea)) visible clip)
+                    in-row? (or in-row? (= role :AXRow))
+                    in-web? (or in-web? (= role :AXWebArea))
+                    (header covered) (when (. table-roles role)
+                                       (header-extent element))
+                    under-header (if covered
+                                     (doto (icollect [_ o (ipairs occluders)] o)
+                                       (table.insert covered))
+                                     occluders)]
+                (each [_ child (ipairs (or (attr element :AXChildren) []))]
+                  (visit child clip
+                         (if (= child header) occluders under-header)
+                         in-row? in-web? (or thin? pass-through?)))))))))
+    (visit root clip occluders false false false)))
+
+(fn screen-frame [rect]
+  "The full frame of the screen RECT is mostly on."
+  (: (or (hs.screen.find (center rect)) (hs.screen.mainScreen)) :fullFrame))
 
 (fn on-screen-frame [rect]
   "Clip RECT to the screen it is mostly on."
-  (let [screen (or (hs.screen.find (center rect)) (hs.screen.mainScreen))]
-    (intersection rect (: screen :fullFrame))))
+  (intersection rect (screen-frame rect)))
+
+;; Clicks this close outside a window's edge go to the window, to resize it.
+(local resize-margin 4)
 
 (fn window-roots [floating]
   "Visible standard windows, front to back, each clipped to its screen and
-  occluded by the windows in front of it and by the FLOATING panel frames."
+  occluded by the windows in front of it, including their resize margins,
+  and by the FLOATING panel frames."
   (let [roots []
         occluders (icollect [_ o (ipairs floating)] o)]
     (each [_ win (ipairs (hs.window.orderedWindows))]
@@ -193,7 +329,10 @@ selected one, with the same modifiers as above.
                                  : clip
                                  :occluders (icollect [_ o (ipairs occluders)] o)
                                  :window win}))
-          (table.insert occluders frame))))
+          (table.insert occluders
+                        {:x (- frame.x resize-margin) :y (- frame.y resize-margin)
+                         :w (+ frame.w (* 2 resize-margin))
+                         :h (+ frame.h (* 2 resize-margin))}))))
     roots))
 
 (fn screen-clip []
@@ -217,6 +356,32 @@ selected one, with the same modifiers as above.
 ;; Windows of agent apps that are drawn as overlays rather than panels.
 (local skipped-panel-subroles {:AXUnknown true})
 
+(local max-overlay-depth 6)
+
+(fn painted-frames [win]
+  "The frames WIN actually draws over the windows below it. Notification
+  Center draws its alerts and widgets on a transparent window as large as the
+  screen, so such a window is looked through, along with the layers inside it
+  spanning (nearly) the screen's width or height, down to the cards on it."
+  (let [frame (attr win :AXFrame)
+        screen (and frame (screen-frame frame))]
+    (if (not frame) []
+        (not (contains? frame screen)) [frame]
+        (let [frames []]
+          (fn layer? [f depth]
+            (and (< depth max-overlay-depth)
+                 (or (>= f.w (* 0.9 screen.w)) (>= f.h (* 0.9 screen.h)))))
+          (fn visit [element depth]
+            (let [f (attr element :AXFrame)]
+              (if (not f) nil
+                  (layer? f depth)
+                  (each [_ child (ipairs (or (attr element :AXChildren) []))]
+                    (visit child (+ depth 1)))
+                  (and (> f.w 1) (> f.h 1))
+                  (table.insert frames f))))
+          (visit win 0)
+          frames))))
+
 (fn panel-roots [clip]
   "Windows of agent (menu-bar-only) apps, which `hs.window.orderedWindows`
   leaves out, e.g. the Emoji & Symbols picker and Character Viewer. A popover
@@ -230,9 +395,11 @@ selected one, with the same modifiers as above.
       (when (and (= (: app :kind) 0) (not= (: app :pid) hs.processInfo.processID))
         (each [_ win (ipairs (or (app-attribute app :AXWindows) []))]
           (when (not (. skipped-panel-subroles (attr win :AXSubrole)))
-            (let [covered (icollect [_ el (ipairs [win (table.unpack (or (attr win :AXChildren) []))])]
-                            (when (or (= el win) (= (attr el :AXRole) :AXPopover))
-                              (attr el :AXFrame)))
+            (let [covered (painted-frames win)
+                  _ (each [_ el (ipairs (or (attr win :AXChildren) []))]
+                      (let [frame (and (= (attr el :AXRole) :AXPopover)
+                                       (attr el :AXFrame))]
+                        (when frame (table.insert covered frame))))
                   panel-clip (and (> (length covered) 0)
                                   (intersection clip (bounds covered)))]
               (when panel-clip
@@ -276,38 +443,81 @@ selected one, with the same modifiers as above.
 
 (local woken-pids {})
 
-(fn wake-web-content []
+(fn chromium? [app]
+  "Chromium and Electron apps ship a crashpad handler with their framework."
+  (let [frameworks (.. (or (: app :path) "") "/Contents/Frameworks")]
+    (var found false)
+    (when (hs.fs.attributes frameworks)
+      (each [name (hs.fs.dir frameworks) &until found]
+        (when (name:match "%.framework$")
+          (let [helpers (.. frameworks "/" name "/Helpers/")]
+            (set found (or (hs.fs.attributes (.. helpers "chrome_crashpad_handler"))
+                           (hs.fs.attributes (.. helpers "browser_crashpad_handler"))
+                           false))))))
+    found))
+
+(fn wake [app]
   "Electron and Chromium only build their web accessibility tree once an
   assistive app asks for it, which AXManualAccessibility does without the
-  side effects of AXEnhancedUserInterface. Safari (WebKit) builds it the
-  first time a client lists the web view's children. Either way the tree
-  arrives asynchronously, so the first walk in a process may miss web
-  content. Returns true the first time a process is seen."
-  (let [app (hs.application.frontmostApplication)
-        pid (and app (: app :pid))]
-    (when (and pid (not (. woken-pids pid)))
-      (tset woken-pids pid true)
-      (pcall #(: (hs.axuielement.applicationElement app)
-                 :setAttributeValue :AXManualAccessibility true))
-      true)))
+  side effects of AXEnhancedUserInterface. Some Chromium builds (e.g. the
+  ChatGPT app) don't support it, and get AXEnhancedUserInterface instead.
+  Safari (WebKit) builds the tree the first time a client lists the web
+  view's children. Either way it arrives asynchronously, up to a few seconds
+  later. Returns true if APP was asked to build a tree."
+  (let [element (hs.axuielement.applicationElement app)
+        set! (fn [name]
+               (let [(ok result) (pcall #(: element :setAttributeValue name true))]
+                 (and ok result true)))]
+    (pcall #(: element :setTimeout 0.5))
+    (or (set! :AXManualAccessibility)
+        ;; Reported as not implemented, yet it builds the tree.
+        (and (chromium? app) (do (set! :AXEnhancedUserInterface) true))
+        false)))
+
+(fn wake-web-content [roots]
+  "Wake every app with a window among ROOTS, and the frontmost one, the
+  first time it is seen. Returns the newly seen pids, each mapped to whether
+  it was asked to build a web tree."
+  (let [fresh {}
+        apps (icollect [_ root (ipairs roots)]
+               (and root.window (: root.window :application)))
+        front (hs.application.frontmostApplication)]
+    (when front (table.insert apps front))
+    (each [_ app (ipairs apps)]
+      (let [pid (: app :pid)]
+        (when (not (. woken-pids pid))
+          (tset woken-pids pid true)
+          (tset fresh pid (wake app)))))
+    fresh))
 
 (fn collect-candidates []
-  (let [woken? (wake-web-content)
-        acc []
-        budget {:visited 0 :deadline (+ (now) time-budget-ns)}
+  "The candidates on screen, and what the rescan needs: the pids woken for
+  the first time, the pids showing web content and their web hint counts."
+  (let [acc []
+        budget {:visited 0 :deadline (+ (now) time-budget-ns) :web-pids {}}
         started (now)
         clip (screen-clip)
-        (panels floating) (panel-roots clip)]
+        (panels floating) (panel-roots clip)
+        windows (window-roots floating)
+        fresh (wake-web-content windows)]
     (each [_ root (ipairs panels)]
       (collect-tree root.element root acc budget))
-    (each [_ root (ipairs (window-roots floating))]
+    (each [_ root (ipairs windows)]
       (collect-tree root.element root acc budget))
     (each [_ root (ipairs (chrome-roots clip))]
       (collect-tree root.element root acc budget))
-    (let [result (dedupe acc)]
+    (let [result (dedupe acc)
+          web-hints {}]
+      (when (or (>= budget.visited max-visited) (>= (now) budget.deadline))
+        (log.wf "Out of budget after %d elements in %.0f ms: some hints are missing"
+                budget.visited (/ (- (now) started) 1e6)))
+      (each [_ c (ipairs result)]
+        (when (and c.web? c.window)
+          (let [pid (: c.window :pid)]
+            (tset web-hints pid (+ 1 (or (. web-hints pid) 0))))))
       (log.df "%d hints from %d elements in %.0f ms" (length result)
               budget.visited (/ (- (now) started) 1e6))
-      (values result woken?))))
+      (values result {: fresh :web-pids budget.web-pids : web-hints}))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -370,7 +580,9 @@ selected one, with the same modifiers as above.
         mods.shift (click point {:button :right})
         mods.cmd (click point {:mods [:cmd]})
         mods.ctrl (click point {:count 2})
-        (and (. press-roles hint.role) (press hint.element)) nil
+        (and (or (. press-roles hint.role) (. notification-subroles hint.subrole))
+             (press hint.element))
+        nil
         (click point {}))))
 
 (fn activate-hint [hint mods]
@@ -724,27 +936,40 @@ selected one, with the same modifiers as above.
         (do (hide-hints) false))))
 
 (local rescan-interval 0.25)
-(local rescan-limit 12)
+(local rescan-limit 20)
+
+(fn settled? [fresh info previous]
+  "Whether every newly woken app that may still be building web content has
+  shown some and its web hints stayed the same since the PREVIOUS scan."
+  (accumulate [ok true pid asked? (pairs fresh) &until (not ok)]
+    (if (or asked? (. info.web-pids pid))
+        (let [n (or (. info.web-hints pid) 0)]
+          (and (> n 0) (= n (or (. previous pid) 0))))
+        true)))
 
 (fn rescan []
-  "Pick up web content that appears after the first walk woke it. Stops at a
-  fixpoint (no new elements after some did appear), once a label is being
-  typed, or when the time is up."
+  "Pick up web content that appears after the first walk woke it. Each app
+  that was just woken and shows web content is rescanned until its web hints
+  reach a fixpoint (some appeared and the next scan found the same); rescans
+  also stop once a label is being typed, or when the time is up."
   (set state.rescans (+ state.rescans 1))
-  (let [candidates (collect-candidates)
-        grew? (> (length candidates) (length state.hints))]
-    (when grew?
+  (let [(candidates info) (collect-candidates)
+        previous state.web-hints]
+    (each [pid asked? (pairs info.fresh)]
+      (tset state.fresh pid asked?))
+    (set state.web-hints info.web-hints)
+    (when (> (length candidates) (length state.hints))
       (label! candidates)
       (set state.hints candidates)
-      (set state.grown? true)
       (render))
-    (when (or (and state.grown? (not grew?)) (>= state.rescans rescan-limit))
+    (when (or (settled? state.fresh info previous)
+              (>= state.rescans rescan-limit))
       (: state.rescanner :stop))))
 
 (fn show-hints []
   "Label every clickable element on screen and wait for a label to be typed."
   (hide-hints)
-  (let [(candidates woken?) (collect-candidates)]
+  (let [(candidates info) (collect-candidates)]
     (if (= (length candidates) 0)
         (minibuffer.message "No clickable elements found")
         (do
@@ -755,8 +980,10 @@ selected one, with the same modifiers as above.
                       :tap (hs.eventtap.new [types.keyDown] on-key)})
           (render)
           (: state.tap :start)
-          (when woken?
+          (when (next info.fresh)
             (set state.rescans 0)
+            (set state.fresh info.fresh)
+            (set state.web-hints info.web-hints)
             (set state.rescanner
                  (hs.timer.doEvery rescan-interval
                                    #(when (and state (= state.typed ""))
