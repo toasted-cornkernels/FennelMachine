@@ -2398,13 +2398,48 @@ M-RET hovers.
                      :h (- (math.max (+ a.y a.h) (+ b.y b.h)) top)}
              :fillColor {:hex palette.caret :alpha 0.4}})))))
 
+  (fn floating-composer [web view]
+    "The top of a chat's composer, a text field floating over the bottom of
+    the page's VIEW, or false: Chromium's chat apps (ChatGPT, say) keep it
+    there, and text under it doesn't show."
+    (var box nil)
+    (var e nil)
+    ;; The lowest text field on screen.
+    (each [_ field (ipairs (or (param web :AXUIElementsForSearchPredicate
+                                      {:AXSearchKey :AXTextFieldSearchKey
+                                       :AXDirection :AXDirectionNext
+                                       :AXResultsLimit 10
+                                       :AXVisibleOnly true})
+                               []))]
+      (let [frame (attr field :AXFrame)]
+        (when (and frame (or (not box) (> frame.y box.y)))
+          (set box frame)
+          (set e (attr field :AXParent)))))
+    ;; The outermost box around it that is still the composer's.
+    (for [_ 1 20 &until (or (not e) (= e web))]
+      (let [frame (attr e :AXFrame)]
+        (if (and frame (< frame.h (/ view.h 3)))
+            (do (set box frame) (set e (attr e :AXParent)))
+            (set e nil))))
+    (or (and box (< (- (+ view.y view.h) (+ box.y box.h)) (/ view.h 10))
+             (> box.y (+ view.y (/ view.h 2)))
+             box.y)
+        false))
+
   (fn caret-viewport []
-    "The part of the page on screen: the scroll area the web area is in."
+    "The part of the page on screen: the scroll area the web area is in, less
+    a chat's composer on Chromium."
     (let [parent (attr state.web :AXParent)
           frame (if (and parent (= (attr parent :AXRole) :AXScrollArea))
                     (attr parent :AXFrame)
-                    (attr state.web :AXFrame))]
-      (and frame (intersection frame (screen-clip)))))
+                    (attr state.web :AXFrame))
+          view (and frame (intersection frame (screen-clip)))]
+      (when (and view state.tape? (= nil state.composer-top))
+        (set state.composer-top (floating-composer state.web view)))
+      (if (and view state.tape? state.composer-top
+               (< view.y state.composer-top (+ view.y view.h)))
+          {:x view.x :y view.y :w view.w :h (- state.composer-top view.y)}
+          view)))
 
   (fn caret-title []
     (.. (case state.visual
