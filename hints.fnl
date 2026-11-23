@@ -10,8 +10,8 @@ click, e.g. Cmd to open a link in a new tab. Before the last key:
 
   r                right click
   t                double click
-  h                press and hold, e.g. for a button's menu
-  Shift-H          hover: move the pointer there without clicking
+  h                hover: move the pointer there without clicking
+  Shift-H          press and hold, e.g. for a button's menu
                    (each of these keys again goes back to a click)
   g                drag: the label picks what to drag, a second one where
                    to; modifiers on its last key are held, e.g. Alt to copy
@@ -914,7 +914,7 @@ M-RET hovers.
 ;; Keys typed before a label's last key to do something other than click. The
 ;; last two pick two labels: what to drag and where to, or where the text to
 ;; copy starts and ends.
-(local hint-actions {:r :right :t :double :h :hold :v :caret :g :drag :y :copy})
+(local hint-actions {:r :right :t :double :h :hover :v :caret :g :drag :y :copy})
 (local action-names {:right "right click" :double "double click"
                      :hold "press and hold" :hover "hover"
                      :drag "drag" :copy "copy text" :caret "caret"})
@@ -1082,8 +1082,8 @@ M-RET hovers.
    [nil "Before it, to act otherwise:"]
    ["r" "right click" palette.right]
    ["t" "double click" palette.double]
-   ["h" "press and hold" palette.hold]
-   ["H" "hover, no click" palette.hover]
+   ["h" "hover, no click" palette.hover]
+   ["H" "press and hold" palette.hold]
    ["g" "drag: pick what, then where to" palette.drag]
    ["y" "copy text: pick its start, then end" palette.copy]
    ["v" "caret: put a cursor on the text" palette.caret]
@@ -1544,7 +1544,7 @@ M-RET hovers.
         (and plain? (. hint-actions key))
         (do (set-action (. hint-actions key)) true)
         (and (= key :h) flags.shift (not (or flags.cmd flags.ctrl flags.alt)))
-        (do (set-action :hover) true)
+        (do (set-action :hold) true)
         ;; p is a hint character, so Shift-P only parks between labels;
         ;; mid-label it is still a Shift-click.
         (and (= key :p) flags.shift (not flags.alt) (not flags.ctrl)

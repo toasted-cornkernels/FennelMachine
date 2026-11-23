@@ -33,9 +33,9 @@ Type a label to act on it:
 |                          | in a new tab, =Cmd-Shift= in a new front tab              |
 | =r= before the last char | right click                                               |
 | =t= before the last char | double click                                              |
-| =h= before the last char | press and hold (0.5s), e.g. Safari's speaker button menu  |
+| =h= before the last char | hover: move the pointer there without clicking            |
+| =H= before the last char | press and hold (0.5s), e.g. Safari's speaker button menu  |
 |                          | with "Enter Picture in Picture"                           |
-| =H= before the last char | hover: move the pointer there without clicking            |
 | =g= before the last char | drag: pick what, then where to (a second label); its last |
 |                          | char's modifiers are held, e.g. =Alt= to copy a file      |
 | =y= before the last char | copy text: labels go over text, a line at a time on web   |
