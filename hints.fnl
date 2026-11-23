@@ -43,9 +43,14 @@ M-RET hovers.
 (local time-budget-ns 1.5e9)
 (local max-windows 10)
 
-;; Hammerspoon reads hex colours as Generic RGB; see lib/which-key.fnl.
+;; Hammerspoon reads hex colours as Generic RGB; see lib/which-key.fnl. Labels
+;; take the colour of the pending action, or peach while parked; calibrated to
+;; show as batppuccin-mocha's colours do in Emacs: right sky #89dceb, double
+;; green #a6e3a1, hold flamingo #f2cdcd, hover yellow #f9e2af, parked peach
+;; #fab387.
 (local palette {:bg "#bf90f5" :fg "#161623" :typed "#6f4e99" :border "#161623"
-                :parked "#f5c890"})
+                :parked "#f5a677" :right "#79d4e6" :double "#97e091"
+                :hold "#edc1c3" :hover "#f7dd9f"})
 (local font-size 16)
 (local pad-x 5)
 (local pad-y 2)
@@ -701,23 +706,23 @@ M-RET hovers.
 (local hud-pad-y 8)
 
 (fn hud-bindings [parked?]
-  [[nil "on a label's last key:"]
+  [[nil "On a label's last key:"]
    ["key" "click"]
    ["mods-key" "click with those modifiers"]
-   [nil "before it, to act otherwise:"]
-   ["r" "right click"]
-   ["t" "double click"]
-   ["h" "press and hold"]
-   ["v" "hover, no click"]
-   [nil ""]
-   ["P" (if parked? "leave park" "park: stay after each action")]
+   [nil "Before it, to act otherwise:"]
+   ["r" "right click" palette.right]
+   ["t" "double click" palette.double]
+   ["h" "press and hold" palette.hold]
+   ["v" "hover, no click" palette.hover]
+   ["P" (if parked? "leave park" "park: stay after each action") palette.parked]
+   [nil "Any time:"]
    ["/" "search by text"]
    ["TAB" "scroll mode"]
    ["DEL" "delete a typed key"]
    ["ESC C-g" "cancel"]])
 
 (fn scroll-bindings []
-  [[nil "type an area's label to pick it"]
+  [[nil "Type an area's label to pick it, then:"]
    ["h j k l" "scroll while held"]
    ["S-hjkl" "scroll faster"]
    ["d u" "half a page down / up"]
@@ -726,20 +731,22 @@ M-RET hovers.
    ["ESC C-g q" "leave"]])
 
 (fn hud-text [title-text title-color bindings]
+  "The HUD's text: TITLE-TEXT, then BINDINGS, [key description key-color]
+  rows, where a row without a key is a subsection heading, with a blank line
+  before it."
   (let [width (accumulate [w 0 _ [key] (ipairs bindings)]
                 (math.max w (length (or key ""))))
         font {:name font-name :size hud-font-size}
         styled (fn [text color]
-                 (hs.styledtext.new text {: font :color {:hex color}}))
-        title (styled (.. title-text "\n") title-color)]
-    (accumulate [text title i [key desc] (ipairs bindings)]
-      (let [newline (if (< i (length bindings)) "\n" "")]
-        (if key
-            (.. text
-                (styled (.. key (string.rep " " (- width (length key))) "  ")
-                        hud-palette.key)
-                (styled (.. desc newline) hud-palette.fg))
-            (.. text (styled (.. desc newline) hud-palette.dim)))))))
+                 (hs.styledtext.new text {: font :color {:hex color}}))]
+    (accumulate [text (styled title-text title-color)
+                 _ [key desc key-color] (ipairs bindings)]
+      (if key
+          (.. text
+              (styled (.. "\n" key (string.rep " " (- width (length key))) "  ")
+                      (or key-color hud-palette.key))
+              (styled desc hud-palette.fg))
+          (.. text (styled (.. "\n\n" desc) hud-palette.dim))))))
 
 (fn hud-elements [canvas-frame screen-frame title-text title-color bindings]
   "Canvas elements for a HUD listing BINDINGS in the bottom right corner of
@@ -762,7 +769,9 @@ M-RET hovers.
       : text}]))
 
 (fn render []
-  (let [visible (visible-hints)]
+  (let [visible (visible-hints)
+        label-color (or (. palette state.action)
+                        (if state.parked? palette.parked palette.bg))]
     (each [_ {: canvas : frame : screen} (ipairs state.canvases)]
       (let [elements (if (= (: screen :id) state.hud-screen)
                          (hud-elements frame (: screen :frame)
@@ -770,9 +779,10 @@ M-RET hovers.
                                            (if state.action
                                                (.. ": " (. action-names state.action))
                                                ""))
-                                       (if state.parked?
-                                           palette.parked
-                                           hud-palette.key)
+                                       (or (. palette state.action)
+                                           (if state.parked?
+                                               palette.parked
+                                               hud-palette.key))
                                        (hud-bindings state.parked?))
                          [])]
         (each [_ hint (ipairs visible)]
@@ -784,9 +794,7 @@ M-RET hovers.
                               {:type :rectangle
                                :frame local-frame
                                :roundedRectRadii {:xRadius 3 :yRadius 3}
-                               :fillColor {:hex (if state.parked?
-                                                    palette.parked
-                                                    palette.bg)}
+                               :fillColor {:hex label-color}
                                :strokeColor {:hex palette.border :alpha 0.6}
                                :strokeWidth 1})
                 (table.insert elements

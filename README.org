@@ -44,7 +44,9 @@ Type a label to act on it:
 | =ESC=, =C-g=, hotkey     | cancel; any other key cancels and goes through            |
 
 The action keys combine with modifiers (=r= then =Cmd= + the last char is a
-Cmd right click); typing one again goes back to a plain click. At the start of
+Cmd right click); typing one again goes back to a plain click. While one is
+pending, the labels and the HUD title take its colour: sky blue for right click,
+green for double click, pink for hold and yellow for hover. At the start of
 a label, a modified key bound as a Hammerspoon hotkey, e.g. =Ctrl-Alt-SPC=,
 closes the hints and goes through; past the start, a modified label character
 is part of the label.
@@ -239,8 +241,9 @@ and winner-mode.
 | Key             | Action                                                  |
 |-----------------+---------------------------------------------------------|
 | =h= =j= =k= =l= | focus the window to the left / below / above / right    |
-| =C-h= … =C-l=   | move the window (repeatable)                            |
-| =s-h= … =s-l=   | move a border (repeatable)                              |
+| =s-h= … =s-l=   | drag the left / top border that way (repeatable)        |
+| =C-h= … =C-l=   | drag the right / bottom border that way (repeatable)    |
+| =M-h= … =M-l=   | move the window (repeatable)                            |
 | =H= … =L=       | resize to that half                                     |
 | =w=             | the last window                                         |
 | =m= / =M=       | maximize / minimize                                     |

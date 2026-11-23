@@ -30,28 +30,45 @@
         {:key :j :action "windows:jump-window-below" :repeatable true}
         {:key :k :action "windows:jump-window-above" :repeatable true}
         {:key :l :action "windows:jump-window-right" :repeatable true}
-        {:mods [:ctrl] :key :hjkl :title :Move}
-        {:mods [:ctrl] :key :h :action "windows:move-left-repeatedly" :repeatable true}
-        {:mods [:ctrl] :key :j :action "windows:move-down-repeatedly" :repeatable true}
-        {:mods [:ctrl] :key :k :action "windows:move-up-repeatedly" :repeatable true}
-        {:mods [:ctrl] :key :l :action "windows:move-right-repeatedly" :repeatable true}
-        {:mods [:cmd] :key :hjkl :title :Resize}
+        {:mods [:cmd] :key :hjkl :title "Top/Left Border"}
         {:mods [:cmd]
          :key :h
-         :action "windows:resize-border-left-repeatedly"
+         :action "windows:left-border-left-repeatedly"
          :repeatable true}
         {:mods [:cmd]
          :key :j
-         :action "windows:resize-border-down-repeatedly"
+         :action "windows:top-border-down-repeatedly"
          :repeatable true}
         {:mods [:cmd]
          :key :k
-         :action "windows:resize-border-up-repeatedly"
+         :action "windows:top-border-up-repeatedly"
          :repeatable true}
         {:mods [:cmd]
          :key :l
-         :action "windows:resize-border-right-repeatedly"
+         :action "windows:left-border-right-repeatedly"
          :repeatable true}
+        {:mods [:ctrl] :key :hjkl :title "Bottom/Right Border"}
+        {:mods [:ctrl]
+         :key :h
+         :action "windows:right-border-left-repeatedly"
+         :repeatable true}
+        {:mods [:ctrl]
+         :key :j
+         :action "windows:bottom-border-down-repeatedly"
+         :repeatable true}
+        {:mods [:ctrl]
+         :key :k
+         :action "windows:bottom-border-up-repeatedly"
+         :repeatable true}
+        {:mods [:ctrl]
+         :key :l
+         :action "windows:right-border-right-repeatedly"
+         :repeatable true}
+        {:mods [:alt] :key :hjkl :title :Move}
+        {:mods [:alt] :key :h :action "windows:move-left-repeatedly" :repeatable true}
+        {:mods [:alt] :key :j :action "windows:move-down-repeatedly" :repeatable true}
+        {:mods [:alt] :key :k :action "windows:move-up-repeatedly" :repeatable true}
+        {:mods [:alt] :key :l :action "windows:move-right-repeatedly" :repeatable true}
         {:mods [:shift] :key :hjkl :title "Resize Half"}
         {:mods [:shift]
          :key :h

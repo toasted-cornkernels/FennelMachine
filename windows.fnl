@@ -110,10 +110,14 @@
     window-frame))
 
 (local window-adjustments
-       {:resize-border-up (nudge 0 -10 0 10)
-        :resize-border-down (nudge 0 0 0 10)
-        :resize-border-left (nudge -10 0 10 0)
-        :resize-border-right (nudge 0 0 10 0)
+       {:top-border-up (nudge 0 -10 0 10)
+        :top-border-down (nudge 0 10 0 -10)
+        :left-border-left (nudge -10 0 10 0)
+        :left-border-right (nudge 10 0 -10 0)
+        :bottom-border-down (nudge 0 0 0 10)
+        :bottom-border-up (nudge 0 0 0 -10)
+        :right-border-left (nudge 0 0 -10 0)
+        :right-border-right (nudge 0 0 10 0)
         :move-up (nudge 0 -10 0 0)
         :move-down (nudge 0 10 0 0)
         :move-left (nudge -10 0 0 0)
@@ -143,6 +147,26 @@
        (<= (math.abs (- a.w b.w)) 1)
        (<= (math.abs (- a.h b.h)) 1)))
 
+(fn near? [a b]
+  (<= (math.abs (- a b)) 1))
+
+(fn keep-anchors [window before target]
+  "Where TARGET moves one edge of the window and leaves the opposite one
+  where it was BEFORE, keep that edge in place even if the app refused the
+  new size: dragging a border of a window at its minimum size must not slide
+  the window."
+  (let [now (window:frame)
+        x (if (and (not (near? target.x before.x))
+                   (near? (+ target.x target.w) (+ before.x before.w)))
+              (- (+ before.x before.w) now.w)
+              now.x)
+        y (if (and (not (near? target.y before.y))
+                   (near? (+ target.y target.h) (+ before.y before.h)))
+              (- (+ before.y before.h) now.h)
+              now.y)]
+    (when (not (and (near? x now.x) (near? y now.y)))
+      (window:setTopLeft {: x : y}))))
+
 (fn repeat-apply [window-adjustment]
   "Repeatedly do `window-adjustment` until its position stabilizes.
   The target is computed once, then re-applied (without animation) while the
@@ -152,7 +176,8 @@
   (let [window (hs.window.focusedWindow)]
     (when window
       (: history :push)
-      (let [target (target-frame window window-adjustment)]
+      (let [before (window:frame)
+            target (target-frame window window-adjustment)]
         (var previous nil)
         (var tries 0)
         (while (and (< tries 5)
@@ -160,7 +185,8 @@
                     (not (and previous (same-frame? (window:frame) previous))))
           (set previous (window:frame))
           (window:setFrame target 0)
-          (set tries (+ tries 1)))))))
+          (set tries (+ tries 1)))
+        (keep-anchors window before target)))))
 
 (local window-adjusters
        (collect [name window-adjustment (pairs window-adjustments)
