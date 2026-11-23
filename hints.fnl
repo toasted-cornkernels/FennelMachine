@@ -25,10 +25,11 @@ click, e.g. Cmd to open a link in a new tab. Before the last key:
                    ends, and Vim's w/b/e/ge and W/B/E/gE by words, )/( by
                    sentences, }/{ to a paragraph's end and start, and
                    ]]/[[ and ][/[] to headings and the ends of the
-                   sections they start; as in Vim, v selects from the
-                   character under it
-                   and V whole lines, then y copies, o goes to the other
-                   end and ESC stops selecting; ESC, C-g or q leaves.
+                   sections they start; C-e/C-y scroll a line, C-f/C-b
+                   a page and C-d/C-u half a page, the cursor along; v, as
+                   in Vim, selects from the character under it and V
+                   whole lines, then y copies, o goes to the other end and
+                   ESC stops selecting; ESC, C-g or q leaves.
                    Chromium's selection is drawn over the page, as it
                    can't be set; y or Cmd-C copies it
   DEL              delete the last typed character, or the first pick
@@ -1106,7 +1107,10 @@ M-RET hovers.
                [") (" "next / previous sentence"]
                ["} {" "end / start of the paragraph"]
                ["]] [[" "next / previous heading"]
-               ["][ []" "end of the section / previous one"]]
+               ["][ []" "end of the section / previous one"]
+               ["C-e C-y" "scroll a line down / up"]
+               ["C-d C-u" "scroll half a page, the cursor along"]
+               ["C-f C-b" "scroll a page down / up"]]
         modes (if visual
                   [[nil "On the selection:"]
                    ["y" "copy it, and stop selecting"]
@@ -2470,8 +2474,9 @@ M-RET hovers.
               (pcall #(: state.web :setAttributeValue :AXSelectedTextMarkerRange
                          range)))))))
 
-  (fn move-caret [i ?goal-x]
-    "Put the cursor on I; ?GOAL-X is the column vertical moves keep to."
+  (fn move-caret [i ?goal-x ?stay]
+    "Put the cursor on I; ?GOAL-X is the column vertical moves keep to. The
+    page scrolls to show it unless ?STAY."
     (when i
       (set state.index i)
       (set state.goal-x ?goal-x)
@@ -2479,7 +2484,8 @@ M-RET hovers.
         (set state.cursor (caret-marker i)))
       (when state.visual
         (select-caret-range))
-      (reveal-caret)
+      (when (not ?stay)
+        (reveal-caret))
       (render-caret)))
 
   (fn set-visual [kind]
@@ -2519,7 +2525,8 @@ M-RET hovers.
       (when state.tape?
         (set state.cursor (caret-marker start)))
       (set state.goal-x nil)
-      (set-visual nil)))
+      (set-visual nil)
+      (reveal-caret)))
 
   (fn swap-caret-ends []
     (let [anchor state.anchor]
@@ -2540,20 +2547,73 @@ M-RET hovers.
       (set state.lost (not (caret-bounds))))
     (render-caret))
 
-  (fn caret-vertical [direction]
-    "Move the cursor a line down (DIRECTION 1) or up (-1), keeping to its
-    column."
+  (fn line-from [i direction goal]
+    "The character in column GOAL of the line after I's, for DIRECTION 1, or
+    before it, for -1."
     (let [web state.web
-          bounds (caret-bounds)
-          goal (or state.goal-x (and bounds (+ bounds.x (/ bounds.w 2))))
-          (from to) (caret-line web state.index)
+          (from to) (caret-line web i)
           next (when from
                  (if (> direction 0)
                      (caret-step web (- to 1) 1)
                      (caret-step web from -1)))
           (next-from next-to) (when next (caret-line web next))]
-      (when (and goal next-from)
-        (move-caret (or (caret-at-x web next-from next-to goal) next) goal))))
+      (when next-from
+        (or (caret-at-x web next-from next-to goal) next))))
+
+  (fn caret-goal []
+    (let [bounds (caret-bounds)]
+      (or state.goal-x (and bounds (+ bounds.x (/ bounds.w 2))))))
+
+  (fn caret-vertical [direction]
+    "Move the cursor a line down (DIRECTION 1) or up (-1), keeping to its
+    column."
+    (let [goal (caret-goal)]
+      (when goal
+        (move-caret (line-from state.index direction goal) goal))))
+
+  (fn scroll-caret [direction amount]
+    "Scroll the page down (DIRECTION 1) or up (-1) by AMOUNT: :line, as
+    Vim's C-e and C-y, or :page, as C-f and C-b (two lines less), the cursor
+    moving only to stay a few lines from the edge, or :half, as C-d and C-u,
+    the cursor going as far, so that it stays where it shows. The cursor
+    moves first, the page as it shows now."
+    (let [bounds (caret-bounds)
+          view (caret-viewport)
+          goal (caret-goal)]
+      (when (and bounds view goal)
+        (let [half? (= amount :half)
+              dy (case amount
+                   :half (math.floor (/ view.h 2))
+                   :page (math.max bounds.h (- view.h (* 2 bounds.h)))
+                   _ bounds.h)
+              margin (* 3 bounds.h)
+              far-enough? (if half?
+                              #(>= (* direction (- $.y bounds.y)) (- dy (/ $.h 2)))
+                              (> direction 0)
+                              #(>= (- $.y dy) (+ view.y margin))
+                              #(<= (+ $.y $.h dy margin) (+ view.y view.h)))]
+          (var i state.index)
+          (var at bounds)
+          (for [_ 1 max-lines &until (or (not at) (far-enough? at))]
+            (let [next (line-from i direction goal)
+                  next-bounds (and next (caret-stop state.web next))]
+              (if next-bounds
+                  (do (set i next) (set at next-bounds))
+                  (set at nil))))
+          (when (not= i state.index)
+            (move-caret i goal true))
+          ;; Where to find the ends again, should Chromium redraw their text
+          ;; before they next show: as far up or down as the page goes.
+          (each [_ point (pairs {:cursor state.cursor-point :anchor state.anchor-point})]
+            (set point.y (- point.y (* direction dy))))
+          (scroll-at (center view) 0 (* -1 direction dy))
+          ;; Should the page not scroll as far, at its end, say.
+          (let [web state.web]
+            (set state.revealer
+                 (hs.timer.doAfter caret-follow-interval
+                                   #(when (= state.web web)
+                                      (reveal-caret)
+                                      (render-caret)))))))))
 
   (fn caret-line-end [end?]
     (let [(from to) (caret-line state.web state.index)]
@@ -2599,8 +2659,9 @@ M-RET hovers.
   (fn on-caret-key [event]
     "Vim's motions move the cursor: h/l a character, j/k a line, 0/$ to the
     line's ends, w/b/e/ge and W/B/E/gE by words, )/( by sentences, }/{ by
-    paragraphs and ]]/[[/][/[] by sections, from heading to heading. v
-    selects from the cursor by characters and V by lines, y copies the
+    paragraphs and ]]/[[/][/[] by sections, from heading to heading; C-e/C-y
+    scroll a line, C-f/C-b a page and C-d/C-u half a page, the cursor
+    along. v selects from the cursor by characters and V by lines, y copies the
     selection, o goes to its other end and ESC stops selecting. ESC when not
     selecting, C-g or q leaves. Other keys, Cmd-c say, leave caret mode,
     keeping the selection, and go through; but on Chromium, where the
@@ -2627,6 +2688,12 @@ M-RET hovers.
           (= typed :V) (do (set-visual :line) true)
           (and (= typed :y) state.visual) (do (yank-selection) true)
           (and (= typed :o) state.visual) (do (swap-caret-ends) true)
+          (and flags.ctrl (= key :e)) (do (scroll-caret 1 :line) true)
+          (and flags.ctrl (= key :y)) (do (scroll-caret -1 :line) true)
+          (and flags.ctrl (= key :d)) (do (scroll-caret 1 :half) true)
+          (and flags.ctrl (= key :u)) (do (scroll-caret -1 :half) true)
+          (and flags.ctrl (= key :f)) (do (scroll-caret 1 :page) true)
+          (and flags.ctrl (= key :b)) (do (scroll-caret -1 :page) true)
           (= typed :j) (do (caret-vertical 1) true)
           (= typed :k) (do (caret-vertical -1) true)
           (= typed :0) (do (caret-line-end false) true)

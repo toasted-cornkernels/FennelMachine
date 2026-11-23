@@ -98,6 +98,12 @@ and the gaps between blocks are skipped. Vim's other motions work too:
   page's end or start when there are no more. A key after =g=, =[= or =]= that
   makes no motion cancels it.
 
+=C-e= and =C-y= scroll the page a line down and up, and =C-f= and =C-b= a page
+(less two lines), the cursor moving only to stay a few lines from the edge;
+=C-d= and =C-u= scroll half a page, the cursor
+going as far, so that it stays where it shows; a selection can thus grow past
+what is on screen.
+
 The page scrolls to keep a few lines around the cursor in view, and the cursor
 follows the page when it is scrolled otherwise. =?= hides the HUD; =ESC=, =C-g= or =q= leaves, and any other key
 leaves and goes through. Only web pages (text markers) are supported so far,
