@@ -7,13 +7,18 @@ of the frontmost app, return to the last window"
 ;; Titled standard windows: no panels or untitled helper windows, but
 ;; minimized windows (whose subrole turns into AXDialog) and those on other
 ;; Spaces are included.
+;; Kept active, the filter follows window events as they happen; a passive
+;; one re-checks every window over Accessibility on each getWindows, which
+;; held up switch-to-window by a few milliseconds per open window.
 (var filter nil)
 
 (fn init []
   (when (not filter)
-    (set filter (: (hs.window.filter.new false) :setDefaultFilter
-                   {:allowRoles [:AXStandardWindow :AXDialog]
-                    :allowTitles 1})))
+    (set filter (-> (hs.window.filter.new false)
+                    (: :setDefaultFilter
+                       {:allowRoles [:AXStandardWindow :AXDialog]
+                        :allowTitles 1})
+                    (: :keepActive))))
   filter)
 
 (fn windows []

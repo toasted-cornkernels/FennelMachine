@@ -273,9 +273,16 @@ The items you pick most often move to the top.
     (table.sort indexed #(if (= $1.n $2.n) (< $1.i $2.i) (> $1.n $2.n)))
     (icollect [_ x (ipairs indexed)] x.c)))
 
+;; The apps found by the last scan, dropped when an app folder changes.
+(var apps-cache nil)
+
+(fn cached-apps []
+  (when (not apps-cache) (set apps-cache (scan-apps)))
+  apps-cache)
+
 (fn collection []
   (let [acc []]
-    (each [_ source (ipairs [scan-apps settings-panes system-commands
+    (each [_ source (ipairs [cached-apps settings-panes system-commands
                              volume-commands shortcut-commands
                              running-app-commands])]
       (let [(ok items) (pcall source)]
@@ -531,17 +538,29 @@ The items you pick most often move to the top.
         "s-e" open-in-emacs
         "C-." act})
 
+(var warm-timer nil)
+(var apps-watchers nil)
+
 (fn show []
   "Open the launcher in the minibuffer."
-  (minibuffer.completing-read "Run: " nil
+  (minibuffer.completing-read "Run: " (collection)
                               {:on-accept accept
                                : dynamic
-                               : actions})
-  (hs.timer.doAfter 0.01
-                    #(when (minibuffer.active?)
-                       (minibuffer.set-collection (collection)))))
+                               : actions}))
 
-{: show
+(fn init []
+  "Read the apps, Settings panes and shortcuts ahead of the first show, which
+  would otherwise take a few hundred milliseconds to open, and watch the app
+  folders so installed or removed apps are scanned again."
+  (set warm-timer (hs.timer.doAfter 1 #(collection)))
+  (set apps-watchers
+       (icollect [_ dir (ipairs app-dirs)]
+         (when (hs.fs.attributes dir)
+           (: (hs.pathwatcher.new dir #(set apps-cache nil)) :start))))
+  apps-watchers)
+
+{: init
+ : show
  : system-commands
  : collection
  : calculate
