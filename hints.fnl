@@ -17,6 +17,8 @@ click, e.g. Cmd to open a link in a new tab. Before the last key:
   Shift-P          park: stay in hint mode after each action, e.g. to
                    Cmd-click several files; Shift-P again leaves
   /                switch to `search`
+  TAB              switch to scroll mode (`scroll-mode`); TAB there
+                   switches back
   ESC / C-g        cancel
 
 A HUD in the bottom right corner of the main screen lists these bindings.
@@ -639,6 +641,8 @@ M-RET hovers.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (var state nil)
+;; Defined with scroll mode below; TAB in hint mode switches to it.
+(var scroll-mode nil)
 
 (local char-size
        (hs.drawing.getTextDrawingSize "M" {:font font-name :size font-size}))
@@ -708,7 +712,7 @@ M-RET hovers.
    [nil ""]
    ["P" (if parked? "leave park" "park: stay after each action")]
    ["/" "search by text"]
-   ["s-J" "scroll an area instead"]
+   ["TAB" "scroll mode"]
    ["DEL" "delete a typed key"]
    ["ESC C-g" "cancel"]])
 
@@ -718,7 +722,7 @@ M-RET hovers.
    ["S-hjkl" "scroll faster"]
    ["d u" "half a page down / up"]
    ["gg G" "top / bottom"]
-   ["TAB S-TAB" "next / previous area"]
+   ["TAB" "back to hints"]
    ["ESC C-g q" "leave"]])
 
 (fn hud-text [title-text title-color bindings]
@@ -1038,7 +1042,7 @@ M-RET hovers.
 (fn on-key [event]
   "Type a label or an action key; any other key closes the hints and goes
   through, so e.g. Cmd-Tab still works. At the start of a label, a key bound as
-  a Hammerspoon hotkey, e.g. Cmd-Shift-J (scroll mode), goes through as well;
+  a Hammerspoon hotkey, e.g. Ctrl-Alt-SPC (search), goes through as well;
   past it, a modified label key is a modified click."
   (let [key (. hs.keycodes.map (: event :getKeyCode))
         flags (: event :getFlags)
@@ -1054,6 +1058,8 @@ M-RET hovers.
         (and (= state.typed "") (hotkey? key flags))
         (do (hide-hints) false)
         (= key "/") (do (hide-hints) (search) true)
+        (and (= key :tab) (not (or flags.cmd flags.ctrl flags.alt)))
+        (do (scroll-mode) true)
         (and plain? (. hint-actions key))
         (let [action (. hint-actions key)]
           (set state.action (if (= state.action action) nil action))
@@ -1191,7 +1197,7 @@ M-RET hovers.
         fits? (fn [a]
                 (or (= a.role :AXScrollArea)
                     (let [frame (attr a.element :AXFrame)
-                          slack {:x (- frame.x 1) :y (- frame.y 1)
+                          slack {:x (+ frame.x 1) :y (+ frame.y 1)
                                  :w (- frame.w 2) :h (- frame.h 2)}]
                       (any? #(and (contains? $ slack)
                                   (or (not (. web-panel-subroles a.subrole))
@@ -1273,8 +1279,7 @@ M-RET hovers.
                               {:type :rectangle
                                :frame {: x : y : w : h}
                                :roundedRectRadii {:xRadius 3 :yRadius 3}
-                               :fillColor {:hex palette.bg
-                                           :alpha (if (= i state.index) 1 0.6)}
+                               :fillColor {:hex palette.bg}
                                :strokeColor {:hex palette.border :alpha 0.6}
                                :strokeWidth 1})
                 (table.insert elements
@@ -1330,8 +1335,8 @@ M-RET hovers.
         half-page (math.floor (/ (. state.areas state.index :frame :h) 2))]
     (if (or (= key :escape) (= key :q) (and flags.ctrl (= key :g)))
         (do (hide-hints) true)
-        ;; Cmd-Shift-J again leaves; other Cmd keys leave and go through.
-        flags.cmd (do (hide-hints) (= key :j))
+        ;; Cmd keys leave and go through, e.g. Cmd-Shift-SPC back to hints.
+        flags.cmd (do (hide-hints) false)
         direction (do (start-scrolling key direction flags.shift) true)
         (= key :d) (do (scroll-by (- half-page)) true)
         (= key :u) (do (scroll-by half-page) true)
@@ -1341,10 +1346,8 @@ M-RET hovers.
                          (scroll-by 1e6)
                          (set state.pending-g true))
                      true)
-        (= key :tab) (let [n (length state.areas)
-                           step (if flags.shift -1 1)]
-                       (select-area (+ (% (+ state.index -1 step n) n) 1))
-                       true)
+        (and (= key :tab) (not (or flags.ctrl flags.alt)))
+        (do (show-hints) true)
         (and key (= (length key) 1) (not flags.shift)
              (scroll-label-chars:find key 1 true))
         (do (type-area-char key) true)
@@ -1354,8 +1357,8 @@ M-RET hovers.
 
 (fn on-scroll-key [event]
   "h/j/k/l scroll while held, d/u by half a page, gg/G to the top/bottom,
-  TAB or an area's label picks another area, ESC, C-g or q leaves. Other keys
-  leave scroll mode and go through."
+  an area's label picks another area, TAB goes back to hints, ESC, C-g or q
+  leaves. Other keys leave scroll mode and go through."
   (let [key (. hs.keycodes.map (: event :getKeyCode))
         direction (. scroll-directions key)
         autorepeat? (= 1 (: event :getProperty
@@ -1371,23 +1374,24 @@ M-RET hovers.
           (set state.pending-g false)
           (on-scroll-key-down key (: event :getFlags) pending-g?)))))
 
-(fn scroll-mode []
-  "Scroll any scroll area on screen from the keyboard, starting with the
-  focused window's largest."
-  (hide-hints)
-  (let [areas (scroll-areas)]
-    (if (= (length areas) 0)
-        (minibuffer.message "Nothing to scroll")
-        (do
-          (set state {:areas areas
-                      :index 1
-                      :typed ""
-                      :hud-screen (: (hs.screen.mainScreen) :id)
-                      :canvases (make-canvases)
-                      :tap (hs.eventtap.new [types.keyDown types.keyUp]
-                                            on-scroll-key)})
-          (render-scroll)
-          (: state.tap :start)))))
+(set scroll-mode
+     (fn []
+       "Scroll any scroll area on screen from the keyboard, starting with the
+       focused window's largest."
+       (hide-hints)
+       (let [areas (scroll-areas)]
+         (if (= (length areas) 0)
+             (minibuffer.message "Nothing to scroll")
+             (do
+               (set state {:areas areas
+                           :index 1
+                           :typed ""
+                           :hud-screen (: (hs.screen.mainScreen) :id)
+                           :canvases (make-canvases)
+                           :tap (hs.eventtap.new [types.keyDown types.keyUp]
+                                                 on-scroll-key)})
+               (render-scroll)
+               (: state.tap :start))))))
 
 {: show-hints
  : hide-hints

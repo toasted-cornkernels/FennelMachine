@@ -11,7 +11,7 @@ mode commands, capture, "Open in Emacs") uses =emacsclient=, so Emacs must be ru
 its server; ELispMachine's =init.el= starts it. If it isn't, those keys say
 "Emacs isn't running its server: M-x server-start" in the echo area.
 
-** Keyboard hints (=Cmd-Shift-SPC=) and scrolling (=Cmd-Shift-J=)
+** Keyboard hints and scrolling (=Cmd-Shift-SPC=, then =TAB=)
 
 =hints.fnl= is a Homerow / Vimium style layer built on the Accessibility API.
 =Cmd-Shift-SPC= labels every clickable element on screen: the visible parts of all
@@ -39,14 +39,15 @@ Type a label to act on it:
 | =Shift-P=                | park: labels turn peach and stay after each action (e.g.  |
 |                          | =Cmd= + labels to select several files); =Shift-P= leaves |
 | =/=                      | switch to the minibuffer search (=Ctrl-Alt-SPC=, below)   |
+| =TAB=                    | switch to scroll mode (below); =TAB= there switches back  |
 | =DEL=                    | delete the last typed character                           |
 | =ESC=, =C-g=, hotkey     | cancel; any other key cancels and goes through            |
 
 The action keys combine with modifiers (=r= then =Cmd= + the last char is a
-Cmd right click); typing one again goes back to a plain click. At the start of a
-label, a modified key bound as a Hammerspoon hotkey, e.g. =Cmd-Shift-J=, closes
-the hints and goes through; past the start, a modified label character is part of
-the label.
+Cmd right click); typing one again goes back to a plain click. At the start of
+a label, a modified key bound as a Hammerspoon hotkey, e.g. =Ctrl-Alt-SPC=,
+closes the hints and goes through; past the start, a modified label character
+is part of the label.
 
 While hints are shown, a small HUD in the bottom right corner of the main screen
 lists these bindings; its title names the chosen action and turns peach while
@@ -56,9 +57,10 @@ Synthetic clicks are posted with exactly the intended modifiers (keys still held
 from the hotkey are ignored), and the pointer is put back afterwards.
 Clicking an element in a background window focuses that window first.
 
-=Cmd-Shift-J= (also from hint mode) labels every visible scroll area on screen,
-in panels and in all windows, so a panel of a background window can be scrolled
-without focusing it. The focused window's largest area is selected first.
+=TAB= in hint mode switches to scroll mode, which labels every visible scroll
+area on screen, in panels and in all windows, so a panel of a background window
+can be scrolled without focusing it. The focused window's largest area is
+selected first.
 
 | Key                       | Action                                   |
 |---------------------------+------------------------------------------|
@@ -66,9 +68,9 @@ without focusing it. The focused window's largest area is selected first.
 | =h= =j= =k= =l= (held)    | scroll smoothly; hold =Shift= for faster |
 | =d= / =u=                 | half a page down / up                    |
 | =gg= / =G=                | top / bottom                             |
-| =TAB=, =S-TAB=            | next / previous area                     |
+| =TAB=                     | back to hint mode                        |
 | =DEL=                     | delete a typed label key                 |
-| =ESC=, =C-g=, =q=, hotkey | leave                                    |
+| =ESC=, =C-g=, =q=         | leave                                    |
 
 Labels leave out the scroll keys, and a HUD in the bottom right lists the
 bindings. A window exposing no scroll areas (some Electron apps) is scrolled as

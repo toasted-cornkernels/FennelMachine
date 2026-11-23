@@ -327,9 +327,6 @@
                       {:mods [:cmd :shift]
                        :key :space
                        :action "hints:show-hints"}
-                      {:mods [:cmd :shift]
-                       :key :j
-                       :action "hints:scroll-mode"}
                       {:mods [:ctrl :alt]
                        :key :space
                        :action "hints:search"}
