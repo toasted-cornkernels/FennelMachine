@@ -40,6 +40,7 @@ Type a label to act on it:
 |                          | =Cmd= + labels to select several files); =Shift-P= leaves |
 | =/=                      | switch to the minibuffer search (=Ctrl-Alt-SPC=, below)   |
 | =TAB=                    | switch to scroll mode (below); =TAB= there switches back  |
+| =?=                      | show or hide the bindings HUD (in scroll mode too)        |
 | =DEL=                    | delete the last typed character                           |
 | =ESC=, =C-g=, hotkey     | cancel; any other key cancels and goes through            |
 
@@ -54,6 +55,8 @@ is part of the label.
 While hints are shown, a small HUD in the bottom right corner of the main screen
 lists these bindings; its title names the chosen action and turns peach while
 parked. Labels are drawn over it, so elements behind it can still be picked.
+Once hidden with =?=, it stays hidden until =?= shows it again. It and the
+other overlays at the bottom (which-key, the minibuffer) draw over the Dock.
 
 Synthetic clicks are posted with exactly the intended modifiers (keys still held
 from the hotkey are ignored), and the pointer is put back afterwards.
@@ -71,6 +74,7 @@ selected first.
 | =d= / =u=                 | half a page down / up                    |
 | =gg= / =G=                | top / bottom                             |
 | =TAB=                     | back to hint mode                        |
+| =?=                       | show or hide the bindings HUD            |
 | =DEL=                     | delete a typed label key                 |
 | =ESC=, =C-g=, =q=         | leave                                    |
 

@@ -163,6 +163,14 @@ echo line such as `SPC w-` underneath.
         :w)
      100))
 
+(fn bottom-frame [screen]
+  "SCREEN's usable frame stretched over the Dock: from below the menu bar to
+  the screen's bottom and sides. Overlays at the bottom, drawn at the overlay
+  level, then cover a visible Dock instead of sitting above it."
+  (let [usable (screen:frame)
+        full (screen:fullFrame)]
+    {:x full.x :y usable.y :w full.w :h (- (+ full.y full.h) usable.y)}))
+
 (fn cell
   [entry column last?]
   "Styled text for one entry; trailing padding is omitted in the last column."
@@ -221,7 +229,7 @@ echo line such as `SPC w-` underneath.
   window. HISTORY is the modal menu history, used for the `SPC w-` echo line."
   (hide)
   (let [screen (or (hs.screen.mainScreen) (hs.screen.primaryScreen))
-        frame (screen:frame)
+        frame (bottom-frame screen)
         max-chars (math.floor (/ (- frame.w (* 2 pad-x)) (char-width)))
         text (render (layout (menu-entries menu) max-chars)
                      (echo-for menu history))
@@ -249,4 +257,5 @@ echo line such as `SPC w-` underneath.
  : palette
  : font-name
  : font-size
- : char-width}
+ : char-width
+ : bottom-frame}

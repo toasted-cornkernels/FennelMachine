@@ -50,7 +50,7 @@ in any order, anywhere in a candidate.
        (. (hs.drawing.getTextDrawingSize "M" {:font font-name :size font-size}) :h))
 
 (fn screen-frame []
-  (: (or (hs.screen.mainScreen) (hs.screen.primaryScreen)) :frame))
+  (which-key.bottom-frame (or (hs.screen.mainScreen) (hs.screen.primaryScreen))))
 
 (fn max-chars []
   (math.floor (/ (- (. (screen-frame) :w) (* 2 pad-x)) (which-key.char-width))))

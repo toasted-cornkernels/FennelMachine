@@ -19,9 +19,11 @@ click, e.g. Cmd to open a link in a new tab. Before the last key:
   /                switch to `search`
   TAB              switch to scroll mode (`scroll-mode`); TAB there
                    switches back
+  ?                show or hide the bindings HUD, in scroll mode too
   ESC / C-g        cancel
 
-A HUD in the bottom right corner of the main screen lists these bindings.
+A HUD in the bottom right corner of the main screen lists these bindings;
+once hidden with ?, it stays hidden until ? shows it again.
 Synthetic clicks put the pointer back where it was.
 
 `search` is a Shortcat style alternative in the minibuffer (lib/minibuffer.fnl):
@@ -705,6 +707,12 @@ M-RET hovers.
 (local hud-pad-x 12)
 (local hud-pad-y 8)
 
+;; Whether the HUD is shown; `?` toggles it, and it stays so until toggled again.
+(var hud-shown? true)
+
+(fn toggle-hud []
+  (set hud-shown? (not hud-shown?)))
+
 (fn hud-bindings [parked?]
   [[nil "On a label's last key:"]
    ["key" "click"]
@@ -716,9 +724,10 @@ M-RET hovers.
    ["v" "hover, no click" palette.hover]
    ["P" (if parked? "leave park" "park: stay after each action") palette.parked]
    [nil "Any time:"]
+   ["DEL" "delete a typed key"]
    ["/" "search by text"]
    ["TAB" "scroll mode"]
-   ["DEL" "delete a typed key"]
+   ["?" "hide this HUD"]
    ["ESC C-g" "cancel"]])
 
 (fn scroll-bindings []
@@ -728,6 +737,7 @@ M-RET hovers.
    ["d u" "half a page down / up"]
    ["gg G" "top / bottom"]
    ["TAB" "back to hints"]
+   ["?" "hide this HUD"]
    ["ESC C-g q" "leave"]])
 
 (fn hud-text [title-text title-color bindings]
@@ -750,7 +760,7 @@ M-RET hovers.
 
 (fn hud-elements [canvas-frame screen-frame title-text title-color bindings]
   "Canvas elements for a HUD listing BINDINGS in the bottom right corner of
-  SCREEN-FRAME, the usable part of the screen CANVAS-FRAME covers."
+  SCREEN-FRAME, the part of the screen CANVAS-FRAME covers below the menu bar."
   (let [text (hud-text title-text title-color bindings)
         size (hs.drawing.getTextDrawingSize text)
         w (+ (math.ceil size.w) (* 2 hud-pad-x))
@@ -773,8 +783,8 @@ M-RET hovers.
         label-color (or (. palette state.action)
                         (if state.parked? palette.parked palette.bg))]
     (each [_ {: canvas : frame : screen} (ipairs state.canvases)]
-      (let [elements (if (= (: screen :id) state.hud-screen)
-                         (hud-elements frame (: screen :frame)
+      (let [elements (if (and hud-shown? (= (: screen :id) state.hud-screen))
+                         (hud-elements frame (which-key.bottom-frame screen)
                                        (.. (if state.parked? "Hints (parked)" "Hints")
                                            (if state.action
                                                (.. ": " (. action-names state.action))
@@ -1065,6 +1075,8 @@ M-RET hovers.
         (do (when (not autorepeat?) (hide-hints)) true)
         (and (= state.typed "") (hotkey? key flags))
         (do (hide-hints) false)
+        (and (= key "/") flags.shift (not (or flags.cmd flags.ctrl flags.alt)))
+        (do (toggle-hud) (render) true)
         (= key "/") (do (hide-hints) (search) true)
         (and (= key :tab) (not (or flags.cmd flags.ctrl flags.alt)))
         (do (scroll-mode) true)
@@ -1260,8 +1272,8 @@ M-RET hovers.
 
 (fn render-scroll []
   (each [_ {: canvas : frame : screen} (ipairs state.canvases)]
-    (let [elements (if (= (: screen :id) state.hud-screen)
-                       (hud-elements frame (: screen :frame) "Scroll"
+    (let [elements (if (and hud-shown? (= (: screen :id) state.hud-screen))
+                       (hud-elements frame (which-key.bottom-frame screen) "Scroll"
                                      hud-palette.key (scroll-bindings))
                        [])]
       (each [i area (ipairs state.areas)]
@@ -1356,6 +1368,8 @@ M-RET hovers.
                      true)
         (and (= key :tab) (not (or flags.ctrl flags.alt)))
         (do (show-hints) true)
+        (and (= key "/") flags.shift (not (or flags.ctrl flags.alt)))
+        (do (toggle-hud) (render-scroll) true)
         (and key (= (length key) 1) (not flags.shift)
              (scroll-label-chars:find key 1 true))
         (do (type-area-char key) true)
