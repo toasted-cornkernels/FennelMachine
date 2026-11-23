@@ -11,15 +11,15 @@ click, e.g. Cmd to open a link in a new tab. Before the last key:
   r                right click
   t                double click
   h                press and hold, e.g. for a button's menu
-  v                move the pointer there without clicking
-                   (the same key again goes back to a click)
+  Shift-H          hover: move the pointer there without clicking
+                   (each of these keys again goes back to a click)
   g                drag: the label picks what to drag, a second one where
                    to; modifiers on its last key are held, e.g. Alt to copy
   y                copy text: labels go over the text on screen instead,
                    a line at a time in web pages; the label picks where it
                    starts, a second one where it ends. Web text is selected
                    too, so Shift with the arrow keys can still extend it
-  Shift-V          caret mode: labels go over web text a line at a time,
+  v                caret mode: labels go over web text a line at a time,
                    and the label puts a cursor at its start, which h/l move
                    a character, j/k a line on screen and 0/$ to the line's
                    ends, and Vim's w/b/e/ge and W/B/E/gE by words, )/( by
@@ -28,10 +28,12 @@ click, e.g. Cmd to open a link in a new tab. Before the last key:
                    sections they start; as in Vim, v selects from the
                    character under it
                    and V whole lines, then y copies, o goes to the other
-                   end and ESC stops selecting; ESC, C-g or q leaves
+                   end and ESC stops selecting; ESC, C-g or q leaves.
+                   Chromium's selection is drawn over the page, as it
+                   can't be set; y or Cmd-C copies it
   DEL              delete the last typed character, or the first pick
-  x                clear the text selected in the web pages on screen and
-                   in the focused text field
+  x                clear the text selected in the web pages on screen (but
+                   Chromium's) and in the focused text field
   Shift-P          park: stay in hint mode after each action, e.g. to
                    Cmd-click several files; Shift-P again leaves
   /                switch to `search`
@@ -611,6 +613,65 @@ M-RET hovers.
 (local single-line-height 30)
 (local max-lines 200)
 
+(fn chromium-web? [web]
+  (not= nil (attr web :ChromeAXNodeId)))
+
+(fn marker-order [web]
+  "A function telling whether text marker A comes before B in WEB, or at it.
+  WebKit numbers its markers through the page; Chromium's numbers count from
+  the start of the element a marker is in, so there it asks which of the two
+  starts the range they make."
+  (if (chromium-web? web)
+      (fn [a b]
+        (or (= a b)
+            (let [range (param web :AXTextMarkerRangeForUnorderedTextMarkers [a b])]
+              (and range (= (: range :startMarker) a)))))
+      (fn [a b]
+        (let [i (param web :AXIndexForTextMarker a)
+              j (param web :AXIndexForTextMarker b)]
+          (and i j (<= i j))))))
+
+(fn char-bounds [web from to]
+  "The bounds of the character between markers FROM and TO. Chromium gives
+  the whole page's when the two are in different elements, as at the end of
+  one, so then the element's own are asked for."
+  (let [bounds (param web :AXBoundsForTextMarkerRange
+                      (hs.axuielement.axtextmarker.newRange from to))]
+    (if (and bounds (< bounds.w 200) (< bounds.h 200))
+        bounds
+        (let [element (param web :AXUIElementForTextMarker from)
+              offset (param web :AXIndexForTextMarker from)]
+          (or (and element offset
+                   (param element :AXBoundsForRange {:location offset :length 1}))
+              bounds)))))
+
+(fn chromium-string [web from to]
+  "The text from marker FROM to TO in WEB, a Chromium page. Chromium leaves
+  out the line breaks between blocks, where a step from a character to the
+  next takes in no text, so one goes wherever such a step goes down a line."
+  (let [before? (marker-order web)
+        parts []]
+    (var marker from)
+    (var last nil)
+    (var gap? false)
+    (for [_ 1 20000 &until (or (not marker) (before? to marker))]
+      (let [next (param web :AXNextTextMarkerForTextMarker marker)
+            text (and next (not= next marker)
+                      (param web :AXStringForTextMarkerRange
+                             (hs.axuielement.axtextmarker.newRange marker next)))]
+        (if (= text "") (set gap? true)
+            text (do
+                   (when (and gap? last (not (: (. last 3) :find "\n$")))
+                     (let [a (char-bounds web (. last 1) (. last 2))
+                           b (char-bounds web marker next)]
+                       (when (and a b (>= b.y (+ a.y (/ a.h 2))))
+                         (table.insert parts "\n"))))
+                   (set gap? false)
+                   (set last [marker next text])
+                   (table.insert parts text)))
+        (set marker (when text next))))
+    (table.concat parts)))
+
 (fn text-lines [c ?limit]
   "Web text candidate C as one candidate per line on screen, each with the
   text markers of its start and end, looking at no more than ?LIMIT lines. A
@@ -620,25 +681,23 @@ M-RET hovers.
         range (param web :AXTextMarkerRangeForUIElement c.element)
         start (and range (: range :startMarker))
         end (and range (: range :endMarker))
-        end-index (and end (param web :AXIndexForTextMarker end))
+        before? (marker-order web)
         full (attr c.element :AXFrame)
         line-candidate (fn [frame from to]
                          {:element c.element :role c.role :frame frame
                           :window c.window :web? web :start from :end to})]
-    (if (not end-index) []
+    (if (not end) []
         (or (not full) (<= full.h single-line-height))
         [(line-candidate c.frame start end)]
         (let [lines []]
           (var marker start)
-          (var previous -1)
+          (var previous nil)
           (for [i 1 (or ?limit max-lines) &until (not marker)]
             (let [line (param web :AXLineTextMarkerRangeForTextMarker marker)
-                  line-end (and line (: line :endMarker))
-                  line-end-index (and line-end
-                                      (param web :AXIndexForTextMarker line-end))]
-              (if (or (not line-end-index) (<= line-end-index previous))
+                  line-end (and line (: line :endMarker))]
+              (if (or (not line-end) (and previous (before? line-end previous)))
                   (set marker nil)
-                  (let [last? (>= line-end-index end-index)
+                  (let [last? (before? end line-end)
                         from (if (= i 1) start (: line :startMarker))
                         to (if last? end line-end)
                         bounds (param web :AXBoundsForTextMarkerRange
@@ -646,7 +705,7 @@ M-RET hovers.
                         shown (and bounds (intersection bounds c.frame))]
                     (when (shown-enough? shown bounds)
                       (table.insert lines (line-candidate shown from to)))
-                    (set previous line-end-index)
+                    (set previous line-end)
                     (set marker (when (not last?)
                                   (param web :AXNextTextMarkerForTextMarker
                                          line-end)))))))
@@ -705,24 +764,29 @@ M-RET hovers.
   "Select the text from the start of A to the end of B, whichever comes
   first, and copy it. Web text is selected in the page, so Shift with the
   arrow keys can still adjust the end; other text, which can't be selected
-  this way, is copied from A through B in HINTS order."
+  this way, is copied from A through B in HINTS order. Chromium ignores
+  selections set this way, so there the text is only copied."
   (let [web a.web?]
     (if (and web a.start b.start (= web b.web?))
-        (let [index #(or (param web :AXIndexForTextMarker $) 0)
-              (first last) (if (<= (index a.start) (index b.start))
+        (let [chromium? (chromium-web? web)
+              (first last) (if ((marker-order web) a.start b.start)
                                (values a b)
                                (values b a))
               ;; Markers from AXTextMarkerRangeForUIElement read fine, but
               ;; selecting them can land a few characters off, past a link,
               ;; say; markers made from character indices select exactly.
-              remake #(let [i (param web :AXIndexForTextMarker $)]
+              remake #(let [i (and (not chromium?)
+                                   (param web :AXIndexForTextMarker $))]
                         (or (and i (param web :AXTextMarkerForIndex i)) $))
               range (hs.axuielement.axtextmarker.newRange (remake first.start)
                                                           (remake last.end))]
-          ;; Focused, the page shows the selection as active, and takes keys.
-          (pcall #(: web :setAttributeValue :AXFocused true))
-          (pcall #(: web :setAttributeValue :AXSelectedTextMarkerRange range))
-          (copy-text (param web :AXStringForTextMarkerRange range)))
+          (when (not chromium?)
+            ;; Focused, the page shows the selection as active, and takes keys.
+            (pcall #(: web :setAttributeValue :AXFocused true))
+            (pcall #(: web :setAttributeValue :AXSelectedTextMarkerRange range)))
+          (copy-text (if chromium?
+                         (chromium-string web first.start last.end)
+                         (param web :AXStringForTextMarkerRange range))))
         (let [position (fn [hint]
                          (accumulate [found nil i h (ipairs hints) &until found]
                            (when (= h hint) i)))
@@ -736,8 +800,9 @@ M-RET hovers.
             "\n"))))))
 
 (fn deselect-web [web]
-  "Collapse WEB's selection to where it ends. True if text was selected."
-  (let [range (attr web :AXSelectedTextMarkerRange)
+  "Collapse WEB's selection to where it ends. True if text was selected.
+  Chromium ignores selections set this way, so it is left alone."
+  (let [range (and (not (chromium-web? web)) (attr web :AXSelectedTextMarkerRange))
         from (and range (param web :AXIndexForTextMarker (: range :startMarker)))
         to (and range (param web :AXIndexForTextMarker (: range :endMarker)))
         marker (and from to (< from to) (param web :AXTextMarkerForIndex to))]
@@ -849,13 +914,13 @@ M-RET hovers.
 ;; Keys typed before a label's last key to do something other than click. The
 ;; last two pick two labels: what to drag and where to, or where the text to
 ;; copy starts and ends.
-(local hint-actions {:r :right :t :double :h :hold :v :hover :g :drag :y :copy})
+(local hint-actions {:r :right :t :double :h :hold :v :caret :g :drag :y :copy})
 (local action-names {:right "right click" :double "double click"
                      :hold "press and hold" :hover "hover"
                      :drag "drag" :copy "copy text" :caret "caret"})
 (local pair-actions {:drag true :copy true})
 
-;; Defined with caret mode below; picking a text with V starts it.
+;; Defined with caret mode below; picking a text after v starts it.
 (var caret-mode nil)
 
 (var drag-timers [])
@@ -1018,10 +1083,10 @@ M-RET hovers.
    ["r" "right click" palette.right]
    ["t" "double click" palette.double]
    ["h" "press and hold" palette.hold]
-   ["v" "hover, no click" palette.hover]
+   ["H" "hover, no click" palette.hover]
    ["g" "drag: pick what, then where to" palette.drag]
    ["y" "copy text: pick its start, then end" palette.copy]
-   ["V" "caret: put a cursor on the text" palette.caret]
+   ["v" "caret: put a cursor on the text" palette.caret]
    ["P" (if parked? "leave park" "park: stay after each action") palette.parked]
    [nil "Any time:"]
    ["DEL" "delete a typed key, or the first pick"]
@@ -1478,8 +1543,8 @@ M-RET hovers.
         (do (scroll-mode) true)
         (and plain? (. hint-actions key))
         (do (set-action (. hint-actions key)) true)
-        (and (= key :v) flags.shift (not (or flags.cmd flags.ctrl flags.alt)))
-        (do (set-action :caret) true)
+        (and (= key :h) flags.shift (not (or flags.cmd flags.ctrl flags.alt)))
+        (do (set-action :hover) true)
         ;; p is a hint character, so Shift-P only parks between labels;
         ;; mid-label it is still a Shift-click.
         (and (= key :p) flags.shift (not flags.alt) (not flags.ctrl)
@@ -1821,7 +1886,11 @@ M-RET hovers.
 
 ;; A cursor on a web page's text, Vimium style, kept as a character index into
 ;; the page's text: the web area's text markers are made from it whenever
-;; needed, which is exact where markers from elements may not be.
+;; needed, which is exact where markers from elements may not be. Chromium
+;; numbers characters from the start of the element they are in instead, so
+;; there the markers are stepped to one at a time from where the cursor
+;; starts, numbered from it, and kept: a tape that grows either way as the
+;; cursor goes.
 
 (fn define-caret-mode []
   "Caret mode's definitions, in a function of their own: Lua allows a
@@ -1829,33 +1898,177 @@ M-RET hovers.
   them."
   (local caret-scan-limit 400)
   (local caret-follow-interval 0.2)
+  (local tape-limit 5000)
+
+  (fn tape-extend [delta]
+    "Step the tape a character further, forward for DELTA 1, back for -1;
+    false at the page's end or start, where it is marked."
+    (if (if (> delta 0) (>= state.hi state.text-end) (<= state.lo state.text-start))
+        false
+        (let [web state.web
+              edge (if (> delta 0) state.hi state.lo)
+              marker (. state.markers edge)
+              next (param web (if (> delta 0) :AXNextTextMarkerForTextMarker
+                                  :AXPreviousTextMarkerForTextMarker)
+                          marker)
+              ;; Past either end, Chromium gives a marker with no text.
+              text (and next (not= next marker)
+                        (param web :AXStringForTextMarkerRange
+                               (if (> delta 0)
+                                   (hs.axuielement.axtextmarker.newRange marker next)
+                                   (hs.axuielement.axtextmarker.newRange next marker))))
+              i (+ edge delta)]
+          (if text
+              (do
+                (tset state.markers i next)
+                (tset state.texts (math.min edge i) text)
+                (if (> delta 0) (set state.hi i) (set state.lo i))
+                true)
+              (do
+                (if (> delta 0) (set state.text-end edge) (set state.text-start edge))
+                false)))))
+
+  (fn tape-marker [i]
+    "The marker before character I of the tape, stepping to it if need be."
+    (when (<= (- state.lo tape-limit) i (+ state.hi tape-limit))
+      (while (and (> i state.hi) (tape-extend 1)))
+      (while (and (< i state.lo) (tape-extend -1)))
+      (. state.markers i)))
+
+  (fn tape-index [marker]
+    "Where MARKER is on the tape, stepping to it if need be: the first of the
+    tape's markers at or after it."
+    (let [before? state.before?]
+      (var steps 0)
+      (while (and (not (before? marker (. state.markers state.hi)))
+                  (< steps tape-limit) (tape-extend 1))
+        (set steps (+ steps 1)))
+      (while (and (not (before? (. state.markers state.lo) marker))
+                  (< steps tape-limit) (tape-extend -1))
+        (set steps (+ steps 1)))
+      (when (and (before? marker (. state.markers state.hi))
+                 (before? (. state.markers state.lo) marker))
+        (var lo state.lo)
+        (var hi state.hi)
+        (while (< lo hi)
+          (let [mid (math.floor (/ (+ lo hi) 2))]
+            (if (before? marker (. state.markers mid))
+                (set hi mid)
+                (set lo (+ mid 1)))))
+        ;; A line's boundary orders after the stepped marker at the same
+        ;; place, which has the other affinity: no text between them.
+        (let [previous (. state.markers (- lo 1))]
+          (if (and previous (not (before? (. state.markers lo) marker))
+                   (= "" (param state.web :AXStringForTextMarkerRange
+                                (hs.axuielement.axtextmarker.newRange previous
+                                                                      marker))))
+              (- lo 1)
+              lo)))))
+
+  (fn reset-tape [marker]
+    "Start the tape afresh at MARKER, numbered 0, with the cursor on it."
+    (set state.markers {0 marker})
+    (set state.texts {})
+    (set state.lo 0)
+    (set state.hi 0)
+    (set state.text-start (- math.huge))
+    (set state.text-end math.huge)
+    (set state.index 0))
+
+  (fn live? [marker]
+    (let [next (and marker (param state.web :AXNextTextMarkerForTextMarker marker))]
+      (and next
+           (param state.web :AXStringForTextMarkerRange
+                  (hs.axuielement.axtextmarker.newRange marker next))
+           true)))
+
+  (fn text-marker [marker]
+    "MARKER as one in the text: an element's, such as a heading's, gives its
+    bounds, not its characters', as do those stepped to from it; a step away
+    and back gives the text's."
+    (let [web state.web
+          previous (param web :AXPreviousTextMarkerForTextMarker marker)]
+      (or (and previous (param web :AXNextTextMarkerForTextMarker previous))
+          marker)))
+
+  (fn relocate [point]
+    "The marker before the character at POINT on screen, looked for in the
+    element there."
+    (let [web state.web
+          app (hs.axuielement.applicationElementForPID (: web :pid))
+          (ok element) (pcall #(: app :elementAtPosition point))
+          range (and ok element (param web :AXTextMarkerRangeForUIElement element))]
+      (when range
+        (var marker (text-marker (: range :startMarker)))
+        (var found nil)
+        (for [_ 1 tape-limit &until (or found (not marker))]
+          (let [next (param web :AXNextTextMarkerForTextMarker marker)
+                bounds (and next (char-bounds web marker next))]
+            (if (and bounds (> bounds.w 0) (inside? bounds point))
+                (set found marker)
+                (set marker (when (and next (state.before? next (: range :endMarker)))
+                              next)))))
+        found)))
+
+  (fn sync-tape []
+    "Number Chromium's text afresh from the cursor, as markers can go stale
+    when the page redraws what they are in, a code block coming into view,
+    say. If the cursor's has, it is found again where it last showed; the
+    other end of the selection is found on the new tape, or where it showed."
+    (when (not (live? state.cursor))
+      (set state.cursor (or (and state.cursor-point (relocate state.cursor-point))
+                            state.cursor)))
+    (reset-tape state.cursor)
+    (when state.visual
+      (when (not (live? state.anchor-marker))
+        (set state.anchor-marker (and state.anchor-point
+                                      (relocate state.anchor-point))))
+      (set state.anchor (or (and state.anchor-marker (tape-index state.anchor-marker))
+                            0))))
+
+  (fn caret-marker [i]
+    (if state.tape?
+        (tape-marker i)
+        (param state.web :AXTextMarkerForIndex i)))
+
+  (fn caret-index [marker]
+    (if state.tape?
+        (tape-index marker)
+        (param state.web :AXIndexForTextMarker marker)))
 
   (fn index-range [web from to]
     "The text marker range from index FROM to TO (exclusive) of WEB."
-    (let [a (param web :AXTextMarkerForIndex from)
-          b (param web :AXTextMarkerForIndex to)]
+    (let [a (caret-marker from)
+          b (caret-marker to)]
       (when (and a b)
         (hs.axuielement.axtextmarker.newRange a b))))
 
   (fn caret-text [web i]
     "The text at index I of WEB: a character, mostly, but empty where a line
     wraps or a block ends, and led by the bullet at a list item's start."
-    (let [range (index-range web i (+ i 1))]
-      (when range
-        (param web :AXStringForTextMarkerRange range))))
+    (if state.tape?
+        (when (and (tape-marker i) (tape-marker (+ i 1)))
+          (. state.texts i))
+        (let [range (index-range web i (+ i 1))]
+          (when range
+            (param web :AXStringForTextMarkerRange range)))))
 
   (fn caret-char [web i]
     "The text of the character at index I of WEB and its bounds on screen."
     (let [range (index-range web i (+ i 1))]
       (when range
-        (values (param web :AXStringForTextMarkerRange range)
-                (param web :AXBoundsForTextMarkerRange range)))))
+        (values (caret-text web i)
+                (if state.tape?
+                    (char-bounds web (: range :startMarker) (: range :endMarker))
+                    (param web :AXBoundsForTextMarkerRange range))))))
 
   (fn caret-stop [web i]
     "The bounds of the character at I if the cursor can rest there: one that
-    shows, not a line break or the empty boundary between blocks."
+    shows, not a line break, the empty boundary between blocks or an object,
+    such as an image, which Chromium shows as U+FFFC."
     (let [(text bounds) (caret-char web i)]
       (when (and text (not= text "") (not (text:find "^[\r\n]"))
+                 (not (text:find "\239\191\188"))
                  bounds (> bounds.w 0) (> bounds.h 0))
         bounds)))
 
@@ -1865,25 +2078,72 @@ M-RET hovers.
     (let [limit state.text-end]
       (var found nil)
       (var j (+ i delta))
-      (for [_ 1 caret-scan-limit &until (or found (< j 0) (>= j limit))]
+      (for [_ 1 caret-scan-limit &until (or found (< j state.text-start) (>= j limit))]
         (if (caret-stop web j)
             (set found j)
             (set j (+ j delta))))
       found))
 
-  (fn caret-unit [web i unit]
-    "The start and end (exclusive) indices of the UNIT holding I, as WebKit
-    splits the text: :Line (on screen), :Sentence or :Paragraph (a block)."
-    (let [marker (param web :AXTextMarkerForIndex i)
+  (fn page-unit [web i unit]
+    (let [marker (caret-marker i)
           range (and marker (param web (.. :AX unit :TextMarkerRangeForTextMarker)
                                    marker))
-          from (and range (param web :AXIndexForTextMarker (: range :startMarker)))
-          to (and range (param web :AXIndexForTextMarker (: range :endMarker)))]
+          from (and range (caret-index (: range :startMarker)))
+          to (and range (caret-index (: range :endMarker)))]
       (when (and from to)
         (values from to))))
 
   (fn caret-line [web i]
-    (caret-unit web i :Line))
+    (page-unit web i :Line))
+
+  (fn wrapped? [web i unit]
+    "Whether the page splits a UNIT at I only where Chromium does, though
+    the text goes on: where a line wraps or an inline element, such as a
+    code span, starts or ends; and for a sentence, not after one's end."
+    (let [a (caret-step web i -1)
+          b (if (caret-stop web i) i (caret-step web i 1))
+          a-bounds (and a (caret-stop web a))
+          b-bounds (and b (caret-stop web b))]
+      (when (and a-bounds b-bounds (< (- b a) 8))
+        (let [gap (fcollect [j (+ a 1) (- b 1)] (caret-text web j))
+              gap-text (table.concat gap)
+              (_ line-to) (caret-line web a)]
+          (and (= (length gap) (- b a 1))
+               (not (gap-text:find "[\r\n]"))
+               (not (gap-text:find "\239\191\188"))
+               (if (< (math.abs (- (. (center a-bounds) :y)
+                                   (. (center b-bounds) :y)))
+                      (/ (math.min a-bounds.h b-bounds.h) 2))
+                   true
+                   (and (not (accumulate [empty false _ text (ipairs gap)]
+                               (or empty (= text ""))))
+                        line-to (< a line-to) (<= line-to b)))
+               (or (= unit :Paragraph)
+                   (not (: (table.concat (fcollect [j (- b 8) (- b 1)]
+                                           (or (caret-text web j) "")))
+                           :find "[.!?]%W*$"))))))))
+
+  (fn caret-unit [web i unit]
+    "The start and end (exclusive) indices of the UNIT holding I, as the page
+    splits the text: :Line (on screen), :Sentence or :Paragraph (a block).
+    Chromium splits the last two where lines wrap and inline elements start
+    or end too; they are joined."
+    (var (from to) (page-unit web i unit))
+    (when (and state.tape? from (not= unit :Line))
+      ;; At a boundary, the unit given can be either side's.
+      (let [later #(let [(_ to) (page-unit web $1 unit)] (and to (> to $2) to))
+            earlier #(let [from (page-unit web $1 unit)] (and from (< from $2) from))]
+        (var done false)
+        (for [_ 1 max-lines &until (or done (not (wrapped? web to unit)))]
+          (let [next-to (or (later to to) (later (+ to 1) to))]
+            (if next-to (set to next-to) (set done true))))
+        (set done false)
+        (for [_ 1 max-lines &until (or done (not (wrapped? web from unit)))]
+          (let [previous-from (or (earlier (- from 1) from)
+                                  (earlier (- from 2) from))]
+            (if previous-from (set from previous-from) (set done true))))))
+    (when (and from to)
+      (values from to)))
 
   (fn caret-first [web from to]
     (let [i (caret-step web (- from 1) 1)]
@@ -1895,20 +2155,21 @@ M-RET hovers.
 
   (fn caret-at-x [web from to x]
     "The character of the line from FROM to TO (exclusive) under X, or the
-    nearest one, found by bisecting its characters' left edges."
+    nearest one, found by bisecting the line's characters' left edges; only
+    those the cursor can rest on, as the others' bounds can be anywhere."
     (let [first (caret-first web from to)
           last (caret-last web from to)
-          left #(let [(_ b) (caret-char web $)] (if b b.x math.huge))]
+          left #(let [b (caret-stop web $)] (if b b.x math.huge))]
       (when (and first last)
         (var lo first)
         (var hi last)
         (while (< lo hi)
-          (let [mid (math.ceil (/ (+ lo hi) 2))]
-            (if (<= (left mid) x)
-                (set lo mid)
+          (let [mid (math.ceil (/ (+ lo hi) 2))
+                stop (caret-step web (- mid 1) 1)]
+            (if (and stop (<= stop hi) (< (left stop) x))
+                (set lo stop)
                 (set hi (- mid 1)))))
-        (if (caret-stop web lo) lo
-            (or (caret-step web lo -1) first)))))
+        lo)))
 
   (fn caret-from [web i]
     "I if the cursor can rest there, or the nearest index after it that can."
@@ -1916,7 +2177,8 @@ M-RET hovers.
 
   (fn blank-codepoint? [c]
     (or (<= c 32) (= c 0xA0) (= c 0x1680) (<= 0x2000 c 0x200B) (= c 0x2028)
-        (= c 0x2029) (= c 0x202F) (= c 0x205F) (= c 0x3000) (= c 0xFEFF)))
+        (= c 0x2029) (= c 0x202F) (= c 0x205F) (= c 0x3000) (= c 0xFEFF)
+        (= c 0xFFFC)))
 
   (fn punctuation-codepoint? [c]
     (or (< c 0xC0) (<= 0x2010 c 0x2BFF) (<= 0x3001 c 0x303F)
@@ -1946,7 +2208,7 @@ M-RET hovers.
     line wraps or a block ends, is blank."
     (let [memo {}
           class (fn [j]
-                  (if (or (< j 0) (>= j state.text-end)) :edge
+                  (if (or (< j state.text-start) (>= j state.text-end)) :edge
                       (do
                         (when (= nil (. memo j))
                           (tset memo j (char-class (caret-text web j) big?)))
@@ -2003,42 +2265,134 @@ M-RET hovers.
                         (prev-from) (when prev (caret-unit web prev unit))]
                     (when prev-from (caret-from web prev-from)))))))))
 
-  (fn heading-starts [web]
-    "The indices of the starts of the page's headings, in order."
-    (let [headings (or (param web :AXUIElementsForSearchPredicate
-                              {:AXSearchKey :AXHeadingSearchKey
-                               :AXDirection :AXDirectionNext
-                               :AXResultsLimit -1
-                               :AXVisibleOnly false})
-                       [])
-          starts (icollect [_ heading (ipairs headings)]
-                   (let [range (param web :AXTextMarkerRangeForUIElement heading)]
-                     (when range
-                       (param web :AXIndexForTextMarker (: range :startMarker)))))]
-      (table.sort starts)
-      starts))
+  (fn heading-markers [web]
+    "The text markers where the page's headings start, in order; but not
+    those hidden for screen readers only, a pixel or two wide, such as
+    ChatGPT's \"You said:\". (Those off screen can be a pixel high.)"
+    (icollect [_ heading (ipairs (or (param web :AXUIElementsForSearchPredicate
+                                            {:AXSearchKey :AXHeadingSearchKey
+                                             :AXDirection :AXDirectionNext
+                                             :AXResultsLimit -1
+                                             :AXVisibleOnly false})
+                                     []))]
+      (let [size (attr heading :AXSize)
+            range (when (or (not size) (> size.w 2))
+                    (param web :AXTextMarkerRangeForUIElement heading))]
+        (when range
+          (: range :startMarker)))))
+
+  (fn tape-section-motion [web forward? land]
+    "Section motions on Chromium, where headings can be far: one is found by
+    comparing its marker with the cursor's, and the tape numbered afresh
+    from it to LAND, as section-motion does, on the text around it."
+    (let [cursor state.cursor
+          before? state.before?
+          markers (heading-markers web)
+          order (if forward? markers (fcollect [k (length markers) 1 -1] (. markers k)))
+          marker-at #(and $ (caret-marker $))
+          landed (fn [start]
+                   (reset-tape (text-marker start))
+                   (marker-at (land 0)))
+          found (accumulate [found nil _ start (ipairs order) &until found]
+                  (when (if forward? (not (before? start cursor)) (before? start cursor))
+                    (let [m (landed start)]
+                      (when (and m (if forward?
+                                       (not (before? m cursor))
+                                       (not (before? cursor m))))
+                        m))))
+          ;; Text shown to screen readers only is a pixel or two in size.
+          hidden? #(let [leaf (param web :AXUIElementForTextMarker (caret-marker $))
+                         size (and leaf (attr leaf :AXSize))]
+                     (and size (<= size.w 2)))
+          ;; A chat's composer comes after the conversation: its end is
+          ;; before the next text field's start.
+          field (when forward?
+                  (. (or (param web :AXUIElementsForSearchPredicate
+                                {:AXSearchKey :AXTextFieldSearchKey
+                                 :AXStartElement (param web :AXUIElementForTextMarker
+                                                        cursor)
+                                 :AXDirection :AXDirectionNext
+                                 :AXResultsLimit 1
+                                 :AXVisibleOnly false})
+                         [])
+                     1))
+          field-range (and field (param web :AXTextMarkerRangeForUIElement field))
+          target (or found
+                     (if field-range
+                         (do (reset-tape (text-marker (: field-range :startMarker)))
+                             (var j (caret-step web 0 -1))
+                             (for [_ 1 caret-scan-limit &until (not (and j (hidden? j)))]
+                               (set j (caret-step web j -1)))
+                             (marker-at j))
+                         ;; Otherwise the page's end or start, as far as the
+                         ;; tape goes.
+                         (let [delta (if forward? 1 -1)]
+                           (reset-tape cursor)
+                           (for [_ 1 tape-limit &until (not (tape-extend delta))]
+                             nil)
+                           (marker-at (if forward?
+                                          (caret-step web state.hi -1)
+                                          (caret-from web state.lo))))))]
+      (set state.cursor (or target cursor))
+      (sync-tape)
+      (when target 0)))
 
   (fn section-motion [web i keys]
     "Vim's ]] and [[, to the next or previous heading, and ][ and [], to the
     end of this section or the one before, a section running from a heading
     to the next; the page's end or start when there is none."
-    (let [starts (heading-starts web)
-          forward? (= (keys:sub 1 1) "]")
+    (let [forward? (= (keys:sub 1 1) "]")
           heading? (= (keys:sub 1 1) (keys:sub 2 2))
-          order (if forward? starts
-                    (fcollect [k (length starts) 1 -1] (. starts k)))
-          found (accumulate [found nil _ start (ipairs order) &until found]
-                  (let [j (if heading? (caret-from web start)
-                              (caret-step web start -1))]
-                    (when (and j (if forward? (> j i) (< j i)))
-                      j)))]
-      (or found
-          (if forward?
-              (caret-step web state.text-end -1)
-              (caret-from web 0)))))
+          land #(if heading? (caret-from web $) (caret-step web $ -1))]
+      (if state.tape?
+          (tape-section-motion web forward? land)
+          (let [starts (icollect [_ marker (ipairs (heading-markers web))]
+                         (caret-index marker))
+                _ (table.sort starts)
+                order (if forward? starts
+                          (fcollect [k (length starts) 1 -1] (. starts k)))
+                found (accumulate [found nil _ start (ipairs order) &until found]
+                        (let [j (land start)]
+                          (when (and j (if forward? (> j i) (< j i)))
+                            j)))]
+            (or found
+                (if forward?
+                    (caret-step web state.text-end -1)
+                    (caret-from web 0)))))))
 
   (fn caret-bounds []
     (caret-stop state.web state.index))
+
+  (fn selection-pieces [from to]
+    "The text from index FROM to TO (exclusive) a line at a time, as the
+    first and last characters the cursor can rest on of each, for drawing
+    the selection where the page can't show it."
+    (let [web state.web
+          pieces []]
+      (var i (caret-from web from))
+      (for [_ 1 max-lines &until (or (not i) (>= i to))]
+        (let [(_ line-to) (caret-line web i)
+              stop (math.min (if (and line-to (> line-to i)) line-to (+ i 1)) to)
+              last (caret-last web i stop)]
+          (when last
+            (table.insert pieces [i last]))
+          (set i (caret-from web stop))))
+      pieces))
+
+  (fn selection-rectangles [frame]
+    "The selection's lines drawn in FRAME, Chromium's being drawn rather than
+    shown by the page. Characters' bounds are asked for one at a time: a
+    range's across elements are the whole page's."
+    (icollect [_ [first last] (ipairs (or state.pieces []))]
+      (let [a (caret-stop state.web first)
+            b (caret-stop state.web last)]
+        (when (and a b (inside? frame (center a)))
+          (let [top (math.min a.y b.y)]
+            {:type :rectangle :action :fill
+             :frame {:x (- a.x frame.x) :y (- top frame.y)
+                     :w (- (+ b.x b.w) a.x)
+                     :h (- (math.max (+ a.y a.h) (+ b.y b.h)) top)}
+             :fillColor {:hex palette.caret :alpha 0.4}})))))
 
   (fn caret-viewport []
     "The part of the page on screen: the scroll area the web area is in."
@@ -2048,20 +2402,28 @@ M-RET hovers.
                     (attr state.web :AXFrame))]
       (and frame (intersection frame (screen-clip)))))
 
+  (fn caret-title []
+    (.. (case state.visual
+          :char "Caret: visual"
+          :line "Caret: visual line"
+          _ "Caret")
+        (if state.pending (.. "  " state.pending) "")))
+
   (fn render-caret []
-    (let [bounds (caret-bounds)]
+    (let [bounds (caret-bounds)
+          anchor (and state.visual state.tape? (caret-stop state.web state.anchor))]
+      ;; Where to find them again should Chromium redraw their text.
+      (when bounds
+        (set state.cursor-point (center bounds)))
+      (when anchor
+        (set state.anchor-point (center anchor)))
       (each [_ {: canvas : frame : screen} (ipairs state.canvases)]
-        (let [elements (if (and hud-shown? (= (: screen :id) state.hud-screen))
-                           (hud-elements frame (which-key.bottom-frame screen)
-                                         (.. (case state.visual
-                                               :char "Caret: visual"
-                                               :line "Caret: visual line"
-                                               _ "Caret")
-                                             (if state.pending
-                                                 (.. "  " state.pending)
-                                                 ""))
-                                         palette.caret (caret-bindings state.visual))
-                           [])]
+        (let [elements (selection-rectangles frame)]
+          (when (and hud-shown? (= (: screen :id) state.hud-screen))
+            (each [_ element (ipairs (hud-elements frame (which-key.bottom-frame screen)
+                                                   (caret-title) palette.caret
+                                                   (caret-bindings state.visual)))]
+              (table.insert elements element)))
           (when (and bounds (inside? frame (center bounds)))
             (table.insert elements
                           {:type :rectangle :action :strokeAndFill
@@ -2098,17 +2460,23 @@ M-RET hovers.
           (values lo (+ hi 1)))))
 
   (fn select-caret-range []
-    "Select the page's text from the anchor to the cursor."
-    (let [(from to) (caret-selection)
-          range (index-range state.web from to)]
-      (when range
-        (pcall #(: state.web :setAttributeValue :AXSelectedTextMarkerRange range)))))
+    "Select the page's text from the anchor to the cursor; on Chromium, which
+    ignores this, note the lines to draw instead."
+    (let [(from to) (caret-selection)]
+      (if state.tape?
+          (set state.pieces (selection-pieces from to))
+          (let [range (index-range state.web from to)]
+            (when range
+              (pcall #(: state.web :setAttributeValue :AXSelectedTextMarkerRange
+                         range)))))))
 
   (fn move-caret [i ?goal-x]
     "Put the cursor on I; ?GOAL-X is the column vertical moves keep to."
     (when i
       (set state.index i)
       (set state.goal-x ?goal-x)
+      (when state.tape?
+        (set state.cursor (caret-marker i)))
       (when state.visual
         (select-caret-range))
       (reveal-caret)
@@ -2120,10 +2488,12 @@ M-RET hovers.
     (if (or (not kind) (= kind state.visual))
         (do
           (set state.visual nil)
+          (set state.pieces nil)
           (deselect-web state.web))
         (do
           (when (not state.visual)
             (set state.anchor state.index)
+            (set state.anchor-marker state.cursor)
             ;; Focused, the page shows the selection as active.
             (pcall #(: state.web :setAttributeValue :AXFocused true)))
           (set state.visual kind)
@@ -2136,19 +2506,39 @@ M-RET hovers.
     (let [(from to) (caret-selection)
           range (index-range state.web from to)
           start (math.min state.anchor state.index)]
-      (copy-text (let [text (and range (param state.web :AXStringForTextMarkerRange
-                                              range))]
+      (copy-text (let [text (and range
+                                 (if state.tape?
+                                     (chromium-string state.web (: range :startMarker)
+                                                      (: range :endMarker))
+                                     (param state.web :AXStringForTextMarkerRange
+                                            range)))]
                    ;; Lines end with one line break, however far apart blocks are.
                    (if (and text (= state.visual :line)) (pick-values 1 (text:gsub "\n+$" "\n"))
                        text)))
       (set state.index start)
+      (when state.tape?
+        (set state.cursor (caret-marker start)))
       (set state.goal-x nil)
       (set-visual nil)))
 
   (fn swap-caret-ends []
     (let [anchor state.anchor]
       (set state.anchor state.index)
+      (set state.anchor-marker state.cursor)
       (move-caret anchor)))
+
+  (fn resync []
+    (sync-tape)
+    (when state.visual
+      (select-caret-range)))
+
+  (fn follow-caret []
+    "Redraw the cursor, as the page can scroll by other means; on Chromium,
+    first find it again if the page redrew its text."
+    (when (and state.tape? (not state.lost) (not (caret-bounds)))
+      (resync)
+      (set state.lost (not (caret-bounds))))
+    (render-caret))
 
   (fn caret-vertical [direction]
     "Move the cursor a line down (DIRECTION 1) or up (-1), keeping to its
@@ -2213,7 +2603,8 @@ M-RET hovers.
     selects from the cursor by characters and V by lines, y copies the
     selection, o goes to its other end and ESC stops selecting. ESC when not
     selecting, C-g or q leaves. Other keys, Cmd-c say, leave caret mode,
-    keeping the selection, and go through."
+    keeping the selection, and go through; but on Chromium, where the
+    selection is only drawn, Cmd-c copies it as y does."
     (let [key (. hs.keycodes.map (: event :getKeyCode))
           flags (: event :getFlags)
           typed (typed-key event)
@@ -2221,6 +2612,9 @@ M-RET hovers.
           keys (if pending (.. pending (or typed "")) typed)
           motion (and keys (. caret-motions keys))]
       (set state.pending nil)
+      (when state.tape?
+        (resync)
+        (set state.lost false))
       (if (and flags.ctrl (= key :g)) (do (hide-hints) true)
           motion (do (move-caret (motion state.web state.index)) true)
           ;; Any other key after a prefix only cancels it, as in Vim.
@@ -2238,6 +2632,9 @@ M-RET hovers.
           (= typed :0) (do (caret-line-end false) true)
           (= typed "$") (do (caret-line-end true) true)
           (= typed "?") (do (toggle-hud) (render-caret) true)
+          ;; Chromium's selection is only drawn, so Cmd-c can't copy it.
+          (and flags.cmd (= key :c) state.visual state.tape?)
+          (do (yank-selection) (hide-hints) true)
           (do (hide-hints) false))))
 
   (fn [hint]
@@ -2245,23 +2642,34 @@ M-RET hovers.
     the keyboard."
     (hide-hints)
     (let [web hint.web?
-          start (and web hint.start (param web :AXIndexForTextMarker hint.start))
-          text-end (and web (param web :AXIndexForTextMarker
-                                   (attr web :AXEndTextMarker)))]
+          tape? (and web (chromium-web? web))
+          start (and web hint.start
+                     (if tape? 0 (param web :AXIndexForTextMarker hint.start)))
+          text-end (and web (if tape? math.huge
+                                (param web :AXIndexForTextMarker
+                                       (attr web :AXEndTextMarker))))]
       (if (not (and start text-end))
           (minibuffer.message "The caret only works on web pages for now")
           (do
             (set state {:web web
                         :index start
+                        :text-start (if tape? (- math.huge) 0)
                         :text-end text-end
+                        : tape?
+                        :cursor hint.start
+                        :before? (marker-order web)
                         :hud-screen (: (hs.screen.mainScreen) :id)
                         :canvases (make-canvases)
                         :tap (hs.eventtap.new [types.keyDown] on-caret-key)})
+            (when tape?
+              (reset-tape hint.start))
             (when (not (caret-stop web start))
-              (set state.index (or (caret-step web start 1) start)))
+              (set state.index (or (caret-step web start 1) start))
+              (when tape?
+                (set state.cursor (caret-marker state.index))))
             ;; The cursor follows the page as it scrolls by other means.
             (set state.follower (hs.timer.doEvery caret-follow-interval
-                                                  render-caret))
+                                                  follow-caret))
             (render-caret)
             (: state.tap :start))))))
 

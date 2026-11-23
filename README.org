@@ -35,12 +35,12 @@ Type a label to act on it:
 | =t= before the last char | double click                                              |
 | =h= before the last char | press and hold (0.5s), e.g. Safari's speaker button menu  |
 |                          | with "Enter Picture in Picture"                           |
-| =v= before the last char | move the pointer there without clicking                   |
+| =H= before the last char | hover: move the pointer there without clicking            |
 | =g= before the last char | drag: pick what, then where to (a second label); its last |
 |                          | char's modifiers are held, e.g. =Alt= to copy a file      |
 | =y= before the last char | copy text: labels go over text, a line at a time on web   |
 |                          | pages; pick where it starts, then where it ends           |
-| =Shift-V=, then a label  | caret mode: a cursor at the start of that web text line   |
+| =v=, then a label        | caret mode: a cursor at the start of that web text line   |
 | =Shift-P=                | park: labels turn peach and stay after each action (e.g.  |
 |                          | =Cmd= + labels to select several files); =Shift-P= leaves |
 | =/=                      | switch to the minibuffer search (=Ctrl-Alt-SPC=, below)   |
@@ -79,7 +79,7 @@ text markers), focusing it, so =Shift= with the arrow keys can extend the
 selection before copying again; other text (labels, text fields) is copied whole,
 every labelled text from the first pick through the second joined by newlines.
 
-=Shift-V= starts caret mode, after Vimium's: the labels go over web text a line
+=v= starts caret mode, after Vimium's: the labels go over web text a line
 at a time, and picking one puts a block cursor (rosewater, outlined) at its
 start. =h=/=l= move it a character, =j=/=k= a line on screen, wrapped or not,
 keeping to its column, and =0=/=$= to the line's start and end; line breaks
@@ -100,7 +100,8 @@ and the gaps between blocks are skipped. Vim's other motions work too:
 
 The page scrolls to keep a few lines around the cursor in view, and the cursor
 follows the page when it is scrolled otherwise. =?= hides the HUD; =ESC=, =C-g= or =q= leaves, and any other key
-leaves and goes through. Only web pages (text markers) are supported so far.
+leaves and goes through. Only web pages (text markers) are supported so far,
+in WebKit (Safari) and Chromium (Chrome, Electron apps).
 
 Visual selection works as in Vim: =v= selects from the character under the
 cursor and =V= whole lines (lines on screen, as =j=/=k= move), and the moves
@@ -109,6 +110,16 @@ pressed again; =o= jumps to the other end, =y= copies the selection, stops
 selecting and puts the cursor at its start, and =ESC= stops selecting without
 leaving. Leaving with =C-g=, =q= or a key that goes through (e.g. =Cmd-C=)
 keeps the selection.
+
+Chromium-based apps (Chrome, Electron apps such as ChatGPT) work too, with some
+differences, as their accessibility API cannot set the page's selection and
+numbers text in pieces that change as the page redraws. The selection is drawn
+over the page instead, so =y= or =Cmd-C= copies it (and leaves); the =y= hint
+action copies without selecting, and =x= cannot clear their selections. The cursor is found again where it last showed
+when the text under it is redrawn. Sentences and paragraphs ignore where lines
+wrap and inline elements (e.g. code spans) start and end, which Chromium splits
+them at. Headings shown only to screen readers are skipped, and in chats, the
+end of the page is the end of the conversation, before the composer.
 
 When a full screen app hides the menu bar, its status items are labelled where
 they show once it comes back; picking one presses it through Accessibility,
