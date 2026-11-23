@@ -966,11 +966,12 @@
                :grid {:size :4x2}
                :modules {:windows {:center-ratio "80:50"}}})
 
-;; nREPL server =====================================
+;; REPL =============================================
 ;; ==================================================
 
-;; (local repl (require :repl))
-;; (repl.run (repl.start))
+;; For editors to drive Hammerspoon (bin/hs-fennel-repl); loaded here to open
+;; their REPLs again after a reload.
+(require :repl)
 
 ;; Exports ==========================================
 ;; ==================================================

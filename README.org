@@ -443,6 +443,41 @@ values go to the echo area, long ones to the help HUD; errors are echoed, with t
 traceback in the console. Earlier expressions are offered as candidates, and =RET=
 with an empty input evaluates the selected one again.
 
+** REPL (Emacs' =fennel-mode=)
+
+=bin/hs-fennel-repl= gives a Fennel REPL inside Hammerspoon on stdin and stdout, so
+an editor can run it as its Fennel program. It asks Hammerspoon (=hs -c=, so
+=hs.ipc= must be loaded and the =hs= command installed) to open a Unix socket in
+=$TMPDIR= for it (=repl.fnl=), and relays to the socket with =nc=. The REPL is
+Fennel's own, run in a coroutine, so Hammerspoon carries on while it waits.
+
+In Emacs, the Fennel files of this config set =fennel-program= to the script and
+turn on =fennel-proto-repl-minor-mode= (=init.el=), so evaluation, completion,
+eldoc, documentation and finding definitions all happen in Hammerspoon:
+
+| Key                    | Action                                      |
+|------------------------+---------------------------------------------|
+| =, e e=                | evaluate the expression before point        |
+| =, e f=                | evaluate the top-level form                 |
+| =, e r=                | evaluate the region                         |
+| =, e b=                | evaluate the buffer                         |
+| =, d d=                | documentation                               |
+| =, f d=                | find the definition (xref)                  |
+| =, '=                  | switch to the REPL (starting one if needed) |
+| =, r=                  | reload a module                             |
+| =M-x hammerspoon-repl= | a Hammerspoon REPL from anywhere            |
+
+The plain =fennel-repl= works with the script as well.
+
+Each REPL has an environment of its own over Hammerspoon's globals: it reads them,
+=global= sets them, and its locals, =print= and =io.write= stay its own. Saving a
+config file reloads Hammerspoon, which ends its REPLs. It leaves a marker by each
+socket as it goes; the script waits on it, and once reloaded Hammerspoon opens a
+fresh REPL on the same socket, replaying the Proto REPL's protocol upgrade, so the
+editor's session carries on (locals don't survive). =,exit= or killing the REPL
+buffer ends the script and closes the socket. Interrupting doesn't work: Hammerspoon
+can't be stopped midway through an expression.
+
 ** System (=Cmd-SPC A=)
 
 | Key   | Action                                                                 |

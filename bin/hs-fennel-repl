@@ -1,0 +1,42 @@
+#!/bin/sh
+# A Fennel REPL in Hammerspoon on stdin and stdout, for an editor to run as
+# its Fennel program (Emacs' fennel-mode: `fennel-program').
+#
+# Hammerspoon opens a Unix socket for the REPL (repl.fnl) and nc relays to
+# it. When Hammerspoon reloads, it leaves a marker by the socket, opens the
+# socket again once loaded and removes the marker; meanwhile this waits.
+
+hs=$(command -v hs)
+for candidate in /opt/homebrew/bin/hs /usr/local/bin/hs \
+                 /Applications/Hammerspoon.app/Contents/Frameworks/hs/hs; do
+  [ -n "$hs" ] && break
+  [ -x "$candidate" ] && hs=$candidate
+done
+[ -n "$hs" ] || { echo "hs-fennel-repl: no hs command; run hs.ipc.cliInstall()" >&2; exit 1; }
+
+# The editor's interrupt can't stop Hammerspoon midway; keep the REPL.
+trap '' INT
+
+path=$("$hs" -q -c "return require('repl').listen('$$')" </dev/null 2>&1 | tail -n 1)
+case $path in
+  /*) ;;
+  *) echo "hs-fennel-repl: Hammerspoon didn't open a REPL: $path" >&2; exit 1 ;;
+esac
+marker=$path.resume
+
+while :; do
+  nc -U "$path" 2>/dev/null
+  # Only Hammerspoon reloading or quitting leaves it; the REPL ended else.
+  [ -e "$marker" ] || exit 0
+  waited=0
+  while [ -e "$marker" ]; do
+    if [ $waited -ge 600 ]; then
+      rm -f "$marker"
+      echo "hs-fennel-repl: Hammerspoon didn't come back" >&2
+      exit 1
+    fi
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+  [ -S "$path" ] || exit 1
+done
