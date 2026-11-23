@@ -13,7 +13,25 @@ click, e.g. Cmd to open a link in a new tab. Before the last key:
   h                press and hold, e.g. for a button's menu
   v                move the pointer there without clicking
                    (the same key again goes back to a click)
-  DEL              delete the last typed character
+  g                drag: the label picks what to drag, a second one where
+                   to; modifiers on its last key are held, e.g. Alt to copy
+  y                copy text: labels go over the text on screen instead,
+                   a line at a time in web pages; the label picks where it
+                   starts, a second one where it ends. Web text is selected
+                   too, so Shift with the arrow keys can still extend it
+  Shift-V          caret mode: labels go over web text a line at a time,
+                   and the label puts a cursor at its start, which h/l move
+                   a character, j/k a line on screen and 0/$ to the line's
+                   ends, and Vim's w/b/e/ge and W/B/E/gE by words, )/( by
+                   sentences, }/{ to a paragraph's end and start, and
+                   ]]/[[ and ][/[] to headings and the ends of the
+                   sections they start; as in Vim, v selects from the
+                   character under it
+                   and V whole lines, then y copies, o goes to the other
+                   end and ESC stops selecting; ESC, C-g or q leaves
+  DEL              delete the last typed character, or the first pick
+  x                clear the text selected in the web pages on screen and
+                   in the focused text field
   Shift-P          park: stay in hint mode after each action, e.g. to
                    Cmd-click several files; Shift-P again leaves
   /                switch to `search`
@@ -21,6 +39,9 @@ click, e.g. Cmd to open a link in a new tab. Before the last key:
                    switches back
   ?                show or hide the bindings HUD, in scroll mode too
   ESC / C-g        cancel
+
+Status items of a menu bar hidden by a full screen app are labelled where
+they show once it comes back; picking one brings it back and opens it.
 
 A HUD in the bottom right corner of the main screen lists these bindings;
 once hidden with ?, it stays hidden until ? shows it again.
@@ -48,11 +69,13 @@ M-RET hovers.
 ;; Hammerspoon reads hex colours as Generic RGB; see lib/which-key.fnl. Labels
 ;; take the colour of the pending action, or peach while parked; calibrated to
 ;; show as batppuccin-mocha's colours do in Emacs: right sky #89dceb, double
-;; green #a6e3a1, hold flamingo #f2cdcd, hover yellow #f9e2af, parked peach
-;; #fab387.
+;; green #a6e3a1, hold flamingo #f2cdcd, hover yellow #f9e2af, drag blue
+;; #89b4fa, copy red #f38ba8, caret teal #94e2d5, parked peach #fab387; the
+;; caret mode cursor is rosewater #f5e0dc, as Emacs's is.
 (local palette {:bg "#bf90f5" :fg "#161623" :typed "#6f4e99" :border "#161623"
                 :parked "#f5a677" :right "#79d4e6" :double "#97e091"
-                :hold "#edc1c3" :hover "#f7dd9f"})
+                :hold "#edc1c3" :hover "#f7dd9f" :drag "#78a6f8"
+                :copy "#f07897" :caret "#82dbcb" :cursor "#f2d9d4"})
 (local font-size 16)
 (local pad-x 5)
 (local pad-y 2)
@@ -276,7 +299,7 @@ M-RET hovers.
   collapsed 1px elements; a single zero-size layer is walked through, though,
   such as the header of Finder's list view, which holds its column buttons.
   The pids of apps showing web content are recorded in BUDGET.web-pids, and
-  candidates inside it are marked `web?`."
+  candidates inside it are marked `web?`, the web area they are in."
   (let [pid (and window (: window :pid))]
     (fn visit [element clip occluders in-row? in-web? thin?]
       (set budget.visited (+ budget.visited 1))
@@ -304,7 +327,7 @@ M-RET hovers.
                       (and (= role :AXMenuBarItem) (attr element :AXSelected)))
               (let [clip (if (and visible (= role :AXScrollArea)) visible clip)
                     in-row? (or in-row? (= role :AXRow))
-                    in-web? (or in-web? (= role :AXWebArea))
+                    in-web? (or in-web? (and (= role :AXWebArea) element))
                     (header covered) (when (. table-roles role)
                                        (header-extent element))
                     under-header (if covered
@@ -422,9 +445,25 @@ M-RET hovers.
                   (table.insert frames frame))))))))
     (values roots frames)))
 
+(fn hidden-bar-frame [frame]
+  "Where FRAME, a status item's, shows once its menu bar does, if the menu bar
+  is hidden now, e.g. by a full screen app: hidden, the bar slides up past the
+  screen's top edge, so the item's bottom lies as far above the edge as its top
+  will lie below it."
+  (when (and frame (not (degenerate? frame)))
+    (let [x (+ frame.x (/ frame.w 2))
+          bottom (+ frame.y frame.h)]
+      (accumulate [shown nil _ screen (ipairs (hs.screen.allScreens)) &until shown]
+        (let [full (: screen :fullFrame)]
+          (when (and (>= x full.x) (< x (+ full.x full.w)) (<= bottom full.y))
+            {:x frame.x :y (- (* 2 full.y) bottom) :w frame.w :h frame.h}))))))
+
 (fn chrome-roots [clip]
-  "The frontmost app's menu bar, every app's status menu items and the Dock."
+  "The frontmost app's menu bar, every app's status menu items and the Dock.
+  Status items of a hidden menu bar are returned as candidates of their own,
+  labelled where they will show: pressing one brings the menu bar back."
   (let [roots []
+        hidden []
         front (hs.application.frontmostApplication)]
     (when front
       (let [menubar (attr (hs.axuielement.applicationElement front) :AXMenuBar)]
@@ -437,12 +476,17 @@ M-RET hovers.
           (when extras
             ;; The container reports a bogus off-screen frame; its items don't.
             (each [_ item (ipairs (or (attr extras :AXChildren) []))]
-              (table.insert roots {:element item : clip :occluders []}))))))
+              (let [shown (hidden-bar-frame (attr item :AXFrame))]
+                (if shown
+                    (table.insert hidden {:element item :role :AXMenuBarItem
+                                          :subrole (attr item :AXSubrole)
+                                          :frame shown :hidden-bar? true})
+                    (table.insert roots {:element item : clip :occluders []}))))))))
     (let [dock (hs.application.get :com.apple.dock)]
       (when dock
         (table.insert roots {:element (hs.axuielement.applicationElement dock)
                              : clip :occluders []})))
-    roots))
+    (values roots hidden)))
 
 (fn dedupe [candidates]
   "Drop candidates that would put a second label on the same spot, such as a
@@ -504,9 +548,11 @@ M-RET hovers.
           (tset fresh pid (wake app)))))
     fresh))
 
-(fn collect-candidates []
+(fn collect-candidates [?pick ?chrome?]
   "The candidates on screen, and what the rescan needs: the pids woken for
-  the first time, the pids showing web content and their web hint counts."
+  the first time, the pids showing web content and their web hint counts.
+  ?PICK replaces `clickable?`, and leaves out the menu bar and the Dock unless
+  ?CHROME? is set."
   (let [acc []
         budget {:visited 0 :deadline (+ (now) time-budget-ns) :web-pids {}}
         started (now)
@@ -515,11 +561,15 @@ M-RET hovers.
         windows (window-roots floating)
         fresh (wake-web-content windows)]
     (each [_ root (ipairs panels)]
-      (collect-tree root.element root acc budget))
+      (collect-tree root.element root acc budget ?pick))
     (each [_ root (ipairs windows)]
-      (collect-tree root.element root acc budget))
-    (each [_ root (ipairs (chrome-roots clip))]
-      (collect-tree root.element root acc budget))
+      (collect-tree root.element root acc budget ?pick))
+    (when (or (not ?pick) ?chrome?)
+      (let [(chrome hidden-bar) (chrome-roots clip)]
+        (each [_ root (ipairs chrome)]
+          (collect-tree root.element root acc budget ?pick))
+        (each [_ c (ipairs hidden-bar)]
+          (table.insert acc c))))
     (let [result (dedupe acc)
           web-hints {}]
       (when (or (>= budget.visited max-visited) (>= (now) budget.deadline))
@@ -532,6 +582,193 @@ M-RET hovers.
       (log.df "%d hints from %d elements in %.0f ms" (length result)
               budget.visited (/ (- (now) started) 1e6))
       (values result {: fresh :web-pids budget.web-pids : web-hints}))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Text, for copying a range of it
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(fn param [element name value]
+  "Read a parameterized AX attribute, nil if the element has gone stale."
+  (let [(ok result) (pcall #(: element :parameterizedAttributeValue name value))]
+    (when ok result)))
+
+(fn string-value [element ?name]
+  (let [value (attr element (or ?name :AXValue))]
+    (when (and (= (type value) :string) (value:find "%S"))
+      value)))
+
+(fn text-target? [element role subrole _ in-web?]
+  "Text on a web page, links included, and native labels and text fields."
+  (if in-web?
+      (or (= role :AXLink) (and (= role :AXStaticText) (string-value element) true))
+      (and (or (= role :AXStaticText) (= role :AXTextField) (= role :AXTextArea))
+           (not= subrole :AXSecureTextField)
+           (string-value element)
+           true)))
+
+;; Web text this tall may wrap; it is split into lines, each labelled.
+(local single-line-height 30)
+(local max-lines 200)
+
+(fn text-lines [c ?limit]
+  "Web text candidate C as one candidate per line on screen, each with the
+  text markers of its start and end, looking at no more than ?LIMIT lines. A
+  text's first line can start halfway along the line, after a link, say, so it
+  is labelled where it starts."
+  (let [web c.web?
+        range (param web :AXTextMarkerRangeForUIElement c.element)
+        start (and range (: range :startMarker))
+        end (and range (: range :endMarker))
+        end-index (and end (param web :AXIndexForTextMarker end))
+        full (attr c.element :AXFrame)
+        line-candidate (fn [frame from to]
+                         {:element c.element :role c.role :frame frame
+                          :window c.window :web? web :start from :end to})]
+    (if (not end-index) []
+        (or (not full) (<= full.h single-line-height))
+        [(line-candidate c.frame start end)]
+        (let [lines []]
+          (var marker start)
+          (var previous -1)
+          (for [i 1 (or ?limit max-lines) &until (not marker)]
+            (let [line (param web :AXLineTextMarkerRangeForTextMarker marker)
+                  line-end (and line (: line :endMarker))
+                  line-end-index (and line-end
+                                      (param web :AXIndexForTextMarker line-end))]
+              (if (or (not line-end-index) (<= line-end-index previous))
+                  (set marker nil)
+                  (let [last? (>= line-end-index end-index)
+                        from (if (= i 1) start (: line :startMarker))
+                        to (if last? end line-end)
+                        bounds (param web :AXBoundsForTextMarkerRange
+                                      (hs.axuielement.axtextmarker.newRange from to))
+                        shown (and bounds (intersection bounds c.frame))]
+                    (when (shown-enough? shown bounds)
+                      (table.insert lines (line-candidate shown from to)))
+                    (set previous line-end-index)
+                    (set marker (when (not last?)
+                                  (param web :AXNextTextMarkerForTextMarker
+                                         line-end)))))))
+          lines))))
+
+(fn text-candidates []
+  "The text on screen: web text a line at a time, other text an element at a
+  time."
+  (let [acc []]
+    (each [_ c (ipairs (collect-candidates text-target?))]
+      (if c.web?
+          (each [_ line (ipairs (text-lines c))]
+            (table.insert acc line))
+          (table.insert acc c)))
+    (dedupe acc)))
+
+(fn drag-target? [element role subrole in-row? in-web?]
+  "What can be clicked, text, which may be a draggable item's or a drop zone's,
+  and images, unless they are in a row, which is labelled already. Named lists
+  are drop zones too, such as the days of Calendar's month view."
+  (or (clickable? element role subrole in-row?)
+      (and (not in-row?)
+           (or (text-target? element role subrole in-row? in-web?)
+               (= role :AXImage)
+               (and (= role :AXList) (string-value element :AXTitle)
+                    true)))))
+
+(local drop-strip 24)
+
+(fn drag-candidates []
+  "What can be dragged or dropped on. Web text is labelled where it starts,
+  not at the left of the paragraph it wraps in, so is dragged from there. A
+  list, such as a day of Calendar's month view, is labelled and dropped on
+  along its bottom, below what it holds, where there is usually room."
+  (dedupe
+   (icollect [_ c (ipairs (collect-candidates drag-target? true))]
+     (let [line (and c.web? (= c.role :AXStaticText) (. (text-lines c 1) 1))
+           f c.frame]
+       (if line (set c.frame line.frame)
+           (and (= c.role :AXList) (> f.h (* 2 drop-strip)))
+           (set c.frame {:x f.x :y (- (+ f.y f.h) drop-strip) :w f.w :h drop-strip}))
+       c))))
+
+(fn copy-text [text]
+  (if (and text (text:find "%S"))
+      (do
+        (hs.pasteboard.setContents text)
+        (minibuffer.message
+         (let [line (: (text:gsub "%s+" " ") :match "^%s*(.-)%s*$")]
+           (.. "Copied " (if (> (utf8.len line) 60)
+                             (.. (line:sub 1 (- (utf8.offset line 60) 1)) "…")
+                             line)))))
+      (minibuffer.message "No text to copy")))
+
+(fn select-text [a b hints]
+  "Select the text from the start of A to the end of B, whichever comes
+  first, and copy it. Web text is selected in the page, so Shift with the
+  arrow keys can still adjust the end; other text, which can't be selected
+  this way, is copied from A through B in HINTS order."
+  (let [web a.web?]
+    (if (and web a.start b.start (= web b.web?))
+        (let [index #(or (param web :AXIndexForTextMarker $) 0)
+              (first last) (if (<= (index a.start) (index b.start))
+                               (values a b)
+                               (values b a))
+              ;; Markers from AXTextMarkerRangeForUIElement read fine, but
+              ;; selecting them can land a few characters off, past a link,
+              ;; say; markers made from character indices select exactly.
+              remake #(let [i (param web :AXIndexForTextMarker $)]
+                        (or (and i (param web :AXTextMarkerForIndex i)) $))
+              range (hs.axuielement.axtextmarker.newRange (remake first.start)
+                                                          (remake last.end))]
+          ;; Focused, the page shows the selection as active, and takes keys.
+          (pcall #(: web :setAttributeValue :AXFocused true))
+          (pcall #(: web :setAttributeValue :AXSelectedTextMarkerRange range))
+          (copy-text (param web :AXStringForTextMarkerRange range)))
+        (let [position (fn [hint]
+                         (accumulate [found nil i h (ipairs hints) &until found]
+                           (when (= h hint) i)))
+              i (or (position a) 1)
+              j (or (position b) i)]
+          (copy-text
+           (table.concat
+            (fcollect [k (math.min i j) (math.max i j)]
+              (let [h (. hints k)]
+                (or (string-value h.element) (attr h.element :AXTitle))))
+            "\n"))))))
+
+(fn deselect-web [web]
+  "Collapse WEB's selection to where it ends. True if text was selected."
+  (let [range (attr web :AXSelectedTextMarkerRange)
+        from (and range (param web :AXIndexForTextMarker (: range :startMarker)))
+        to (and range (param web :AXIndexForTextMarker (: range :endMarker)))
+        marker (and from to (< from to) (param web :AXTextMarkerForIndex to))]
+    (when marker
+      (let [(ok) (pcall #(: web :setAttributeValue :AXSelectedTextMarkerRange
+                            (hs.axuielement.axtextmarker.newRange marker marker)))]
+        ok))))
+
+(fn deselect-focused []
+  "Collapse the selection of the focused text element, such as a text field,
+  outside web pages. True if text was selected."
+  (let [element (attr (hs.axuielement.systemWideElement) :AXFocusedUIElement)
+        range (and element (not= (attr element :AXRole) :AXWebArea)
+                   (attr element :AXSelectedTextRange))]
+    (when (and range (> range.length 0))
+      (let [(ok) (pcall #(: element :setAttributeValue :AXSelectedTextRange
+                            {:location (+ range.location range.length)
+                             :length 0}))]
+        ok))))
+
+(fn clear-selections [candidates]
+  "Clear the text selected in the web pages among CANDIDATES and in the
+  focused text element."
+  (let [webs []]
+    (each [_ c (ipairs candidates)]
+      (when (and c.web? (not (any? #(= $ c.web?) webs)))
+        (table.insert webs c.web?)))
+    (let [cleared (accumulate [n 0 _ web (ipairs webs)]
+                    (if (deselect-web web) (+ n 1) n))
+          cleared (if (deselect-focused) (+ cleared 1) cleared)]
+      (minibuffer.message (if (> cleared 0) "Selection cleared" "Nothing selected")))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -609,10 +846,50 @@ M-RET hovers.
 (fn held-modifiers [flags]
   (icollect [_ m (ipairs click-modifiers)] (when (. flags m) m)))
 
-;; Keys typed before a label's last key to do something other than click.
-(local hint-actions {:r :right :t :double :h :hold :v :hover})
+;; Keys typed before a label's last key to do something other than click. The
+;; last two pick two labels: what to drag and where to, or where the text to
+;; copy starts and ends.
+(local hint-actions {:r :right :t :double :h :hold :v :hover :g :drag :y :copy})
 (local action-names {:right "right click" :double "double click"
-                     :hold "press and hold" :hover "hover"})
+                     :hold "press and hold" :hover "hover"
+                     :drag "drag" :copy "copy text" :caret "caret"})
+(local pair-actions {:drag true :copy true})
+
+;; Defined with caret mode below; picking a text with V starts it.
+(var caret-mode nil)
+
+(var drag-timers [])
+
+(fn drag [from to mods]
+  "Drag from the middle of FROM to the middle of TO with MODS held, e.g. alt
+  to copy a file, in small steps and with pauses: apps only start a drag once
+  the pointer moves with the button down (selected text only after a pause,
+  or the press starts a new selection), and targets only accept a drop once
+  the pointer has lingered over them. Web text that can't be dragged gets
+  selected instead, and stays selected (x clears it)."
+  (let [saved (hs.mouse.absolutePosition)
+        a (center from.frame)
+        b (center to.frame)
+        steps 12
+        step-time 0.02
+        pressed 0.3
+        click-state hs.eventtap.event.properties.mouseEventClickState
+        post (fn [type point]
+               (: (doto (hs.eventtap.event.newMouseEvent type point mods)
+                    (: :setProperty click-state 1))
+                  :post))
+        at (fn [delay f] (table.insert drag-timers (hs.timer.doAfter delay f)))
+        moved (+ pressed (* steps step-time))]
+    (set drag-timers [])
+    (hs.mouse.absolutePosition a)
+    (at 0.05 #(post types.leftMouseDown a))
+    (for [i 1 steps]
+      (let [t (/ i steps)
+            p {:x (+ a.x (* t (- b.x a.x))) :y (+ a.y (* t (- b.y a.y)))}]
+        (at (+ pressed (* i step-time)) #(post types.leftMouseDragged p))))
+    (at (+ moved 0.1) #(post types.leftMouseDragged b))
+    (at (+ moved 0.25) #(post types.leftMouseUp b))
+    (at (+ moved 0.4) #(hs.mouse.absolutePosition saved))))
 
 (fn perform [hint action flags]
   "Do ACTION (nil to click) on HINT with the modifiers in FLAGS held. A plain
@@ -620,7 +897,10 @@ M-RET hovers.
   (let [point (center hint.frame)
         mods (held-modifiers flags)]
     (case action
+      :caret (caret-mode hint)
       :hover (hs.mouse.absolutePosition point)
+      ;; Nothing is there to click until the hidden menu bar shows again.
+      (where _ hint.hidden-bar?) (press hint.element)
       :right (click point {:button :right : mods})
       :double (click point {:count 2 : mods})
       :hold (click point {:hold hold-time : mods})
@@ -641,6 +921,23 @@ M-RET hovers.
           (: win :focus)
           (hs.timer.doAfter 0.15 #(perform hint action flags)))
         (perform hint action flags))))
+
+(fn activate-pair [from to action flags hints]
+  "Drag FROM to TO, or copy the text from FROM to TO, bringing its window
+  forward first so the selection can be adjusted from the keyboard. A drag
+  leaves the windows as they are: the source's coming forward could cover the
+  target."
+  (if (= action :drag)
+      (if (= from to)
+          (minibuffer.message "Pick somewhere else to drop it")
+          (drag from to (held-modifiers flags)))
+      (let [win from.window
+            focused (hs.window.focusedWindow)]
+        (if (and win (not (and focused (= (: focused :id) (: win :id)))))
+            (do
+              (: win :focus)
+              (hs.timer.doAfter 0.15 #(select-text from to hints)))
+            (select-text from to hints)))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -722,13 +1019,48 @@ M-RET hovers.
    ["t" "double click" palette.double]
    ["h" "press and hold" palette.hold]
    ["v" "hover, no click" palette.hover]
+   ["g" "drag: pick what, then where to" palette.drag]
+   ["y" "copy text: pick its start, then end" palette.copy]
+   ["V" "caret: put a cursor on the text" palette.caret]
    ["P" (if parked? "leave park" "park: stay after each action") palette.parked]
    [nil "Any time:"]
-   ["DEL" "delete a typed key"]
+   ["DEL" "delete a typed key, or the first pick"]
+   ["x" "clear the text selection"]
    ["/" "search by text"]
    ["TAB" "scroll mode"]
    ["?" "hide this HUD"]
    ["ESC C-g" "cancel"]])
+
+(fn caret-bindings [visual]
+  (let [moves [["h l" "previous / next character"]
+               ["j k" "next / previous line"]
+               ["0 $" "start / end of the line"]
+               ["w b" "next / previous word"]
+               ["e ge" "end of the word / previous word"]
+               ["W B E gE" "the same, by words between blanks"]
+               [") (" "next / previous sentence"]
+               ["} {" "end / start of the paragraph"]
+               ["]] [[" "next / previous heading"]
+               ["][ []" "end of the section / previous one"]]
+        modes (if visual
+                  [[nil "On the selection:"]
+                   ["y" "copy it, and stop selecting"]
+                   ["o" "go to its other end"]
+                   ["v V" (if (= visual :char)
+                              "stop selecting / by lines"
+                              "by characters / stop selecting")]
+                   ["ESC" "stop selecting"]]
+                  [[nil "Select:"]
+                   ["v" "from this character"]
+                   ["V" "by lines, from this one"]])
+        rest [[nil "Any time:"]
+              ["?" "hide this HUD"]
+              [(if visual "C-g q" "ESC C-g q") "leave"]]]
+    (let [all []]
+      (each [_ rows (ipairs [moves modes rest])]
+        (each [_ row (ipairs rows)]
+          (table.insert all row)))
+      all)))
 
 (fn scroll-bindings []
   [[nil "Type an area's label to pick it, then:"]
@@ -778,6 +1110,15 @@ M-RET hovers.
               :w (- w (* 2 hud-pad-x)) :h (- h (* 2 hud-pad-y))}
       : text}]))
 
+(fn hud-title []
+  (.. (if state.parked? "Hints (parked)" "Hints")
+      (if state.action
+          (.. ": " (. action-names state.action)
+              (if (not state.from) ""
+                  (= state.action :drag) ", now where to"
+                  ", now where it ends"))
+          "")))
+
 (fn render []
   (let [visible (visible-hints)
         label-color (or (. palette state.action)
@@ -785,16 +1126,24 @@ M-RET hovers.
     (each [_ {: canvas : frame : screen} (ipairs state.canvases)]
       (let [elements (if (and hud-shown? (= (: screen :id) state.hud-screen))
                          (hud-elements frame (which-key.bottom-frame screen)
-                                       (.. (if state.parked? "Hints (parked)" "Hints")
-                                           (if state.action
-                                               (.. ": " (. action-names state.action))
-                                               ""))
+                                       (hud-title)
                                        (or (. palette state.action)
                                            (if state.parked?
                                                palette.parked
                                                hud-palette.key))
                                        (hud-bindings state.parked?))
                          [])]
+        ;; The first of a pair of picks stays outlined until the second.
+        (when (and state.from (intersection state.from.frame frame))
+          (let [f state.from.frame]
+            (table.insert elements
+                          {:type :rectangle :action :strokeAndFill
+                           :frame {:x (- f.x frame.x) :y (- f.y frame.y)
+                                   :w f.w :h f.h}
+                           :roundedRectRadii {:xRadius 3 :yRadius 3}
+                           :fillColor {:hex label-color :alpha 0.2}
+                           :strokeColor {:hex label-color}
+                           :strokeWidth 3})))
         (each [_ hint (ipairs visible)]
           (let [r (label-rect hint)]
             (when (inside? frame (center r))
@@ -831,13 +1180,15 @@ M-RET hovers.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (fn hide-hints []
-  "Leave hint or scroll mode."
+  "Leave hint, scroll or caret mode."
   (when state
     (: state.tap :stop)
     (when state.scroller
       (: state.scroller :stop))
     (when state.rescanner
       (: state.rescanner :stop))
+    (when state.follower
+      (: state.follower :stop))
     (each [_ {: canvas} (ipairs state.canvases)]
       (: canvas :delete))
     (set state nil)))
@@ -849,11 +1200,21 @@ M-RET hovers.
 
 (local refresh-delay 0.3)
 
+(fn hint-set [action]
+  (case action :copy :text :caret :text :drag :drag _ :click))
+
+(fn candidates-for [action]
+  "What ACTION labels: text to copy, things to drag, or what can be clicked."
+  (case (hint-set action)
+    :text (text-candidates)
+    :drag (drag-candidates)
+    _ (collect-candidates)))
+
 (fn refresh [shown]
   "Relabel what is on screen now that an action may have changed it, unless
-  the next label is already being typed."
-  (when (and (= state shown) (= state.typed ""))
-    (let [candidates (collect-candidates)]
+  the next label is already being typed, or its first pick made."
+  (when (and (= state shown) (= state.typed "") (not state.from))
+    (let [candidates (candidates-for state.action)]
       (if (= (length candidates) 0)
           (hide-hints)
           (do
@@ -868,18 +1229,51 @@ M-RET hovers.
       (if (= (length hints) 0) (set state.typed previous)
           (and (= (length hints) 1) (= (. hints 1 :label) state.typed))
           (let [hint (. hints 1)
-                action state.action]
-            (if state.parked?
+                action state.action
+                from state.from
+                all state.hints
+                act (if (not (. pair-actions action))
+                        #(activate-hint hint action flags)
+                        #(activate-pair from hint action flags all))]
+            (if (and (. pair-actions action) (not from))
+                ;; The first of two picks: keep the labels up for the second.
+                (do
+                  (set state.from hint)
+                  (set state.typed "")
+                  (render))
+                state.parked?
                 (let [shown state]
                   (set state.typed "")
                   (set state.action nil)
+                  (set state.from nil)
                   (render)
-                  (activate-hint hint action flags)
-                  (hs.timer.doAfter refresh-delay #(refresh shown)))
+                  (act)
+                  ;; A drag takes a while; relabel once it is over.
+                  (hs.timer.doAfter (if (= action :drag) 1 refresh-delay)
+                                    #(refresh shown)))
                 (do
                   (hide-hints)
-                  (activate-hint hint action flags))))
+                  (act))))
           (render)))))
+
+(fn set-action [action]
+  "Make ACTION pending, or none if it already is. Copying text labels the
+  text on screen instead of what can be clicked, line by line; dragging labels
+  text and images too."
+  (let [previous state.action
+        next (when (not= previous action) action)
+        hints (when (not= (hint-set previous) (hint-set next))
+                (candidates-for next))]
+    (if (and hints (= (length hints) 0))
+        (minibuffer.message (if (= next :copy) "No text found" "Nothing to click"))
+        (do
+          (when hints
+            (label! hints)
+            (set state.hints hints))
+          (set state.action next)
+          (set state.from nil)
+          (set state.typed "")))
+    (render)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Search (Shortcat style, in the minibuffer)
@@ -1078,13 +1472,14 @@ M-RET hovers.
         (and (= key "/") flags.shift (not (or flags.cmd flags.ctrl flags.alt)))
         (do (toggle-hud) (render) true)
         (= key "/") (do (hide-hints) (search) true)
+        (and plain? (= key :x))
+        (do (clear-selections state.hints) true)
         (and (= key :tab) (not (or flags.cmd flags.ctrl flags.alt)))
         (do (scroll-mode) true)
         (and plain? (. hint-actions key))
-        (let [action (. hint-actions key)]
-          (set state.action (if (= state.action action) nil action))
-          (render)
-          true)
+        (do (set-action (. hint-actions key)) true)
+        (and (= key :v) flags.shift (not (or flags.cmd flags.ctrl flags.alt)))
+        (do (set-action :caret) true)
         ;; p is a hint character, so Shift-P only parks between labels;
         ;; mid-label it is still a Shift-click.
         (and (= key :p) flags.shift (not flags.alt) (not flags.ctrl)
@@ -1098,7 +1493,10 @@ M-RET hovers.
               true))
         (= key :delete)
         (do
-          (set state.typed (state.typed:sub 1 -2))
+          ;; With nothing typed, DEL takes back the first of two picks.
+          (if (and (= state.typed "") state.from)
+              (set state.from nil)
+              (set state.typed (state.typed:sub 1 -2)))
           (render)
           true)
         (and key (= (length key) 1) (hint-chars:find key 1 true))
@@ -1158,7 +1556,9 @@ M-RET hovers.
             (set state.web-hints info.web-hints)
             (set state.rescanner
                  (hs.timer.doEvery rescan-interval
-                                   #(when (and state (= state.typed ""))
+                                   #(when (and state (= state.typed "")
+                                               (= (hint-set state.action)
+                                                  :click))
                                       (rescan)))))))))
 
 
@@ -1414,6 +1814,458 @@ M-RET hovers.
                                                  on-scroll-key)})
                (render-scroll)
                (: state.tap :start))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Caret mode
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; A cursor on a web page's text, Vimium style, kept as a character index into
+;; the page's text: the web area's text markers are made from it whenever
+;; needed, which is exact where markers from elements may not be.
+
+(fn define-caret-mode []
+  "Caret mode's definitions, in a function of their own: Lua allows a
+  function at most 200 locals, and the module's main chunk has most of
+  them."
+  (local caret-scan-limit 400)
+  (local caret-follow-interval 0.2)
+
+  (fn index-range [web from to]
+    "The text marker range from index FROM to TO (exclusive) of WEB."
+    (let [a (param web :AXTextMarkerForIndex from)
+          b (param web :AXTextMarkerForIndex to)]
+      (when (and a b)
+        (hs.axuielement.axtextmarker.newRange a b))))
+
+  (fn caret-text [web i]
+    "The text at index I of WEB: a character, mostly, but empty where a line
+    wraps or a block ends, and led by the bullet at a list item's start."
+    (let [range (index-range web i (+ i 1))]
+      (when range
+        (param web :AXStringForTextMarkerRange range))))
+
+  (fn caret-char [web i]
+    "The text of the character at index I of WEB and its bounds on screen."
+    (let [range (index-range web i (+ i 1))]
+      (when range
+        (values (param web :AXStringForTextMarkerRange range)
+                (param web :AXBoundsForTextMarkerRange range)))))
+
+  (fn caret-stop [web i]
+    "The bounds of the character at I if the cursor can rest there: one that
+    shows, not a line break or the empty boundary between blocks."
+    (let [(text bounds) (caret-char web i)]
+      (when (and text (not= text "") (not (text:find "^[\r\n]"))
+                 bounds (> bounds.w 0) (> bounds.h 0))
+        bounds)))
+
+  (fn caret-step [web i delta]
+    "The nearest index past I, in the direction of DELTA, the cursor can rest
+    on."
+    (let [limit state.text-end]
+      (var found nil)
+      (var j (+ i delta))
+      (for [_ 1 caret-scan-limit &until (or found (< j 0) (>= j limit))]
+        (if (caret-stop web j)
+            (set found j)
+            (set j (+ j delta))))
+      found))
+
+  (fn caret-unit [web i unit]
+    "The start and end (exclusive) indices of the UNIT holding I, as WebKit
+    splits the text: :Line (on screen), :Sentence or :Paragraph (a block)."
+    (let [marker (param web :AXTextMarkerForIndex i)
+          range (and marker (param web (.. :AX unit :TextMarkerRangeForTextMarker)
+                                   marker))
+          from (and range (param web :AXIndexForTextMarker (: range :startMarker)))
+          to (and range (param web :AXIndexForTextMarker (: range :endMarker)))]
+      (when (and from to)
+        (values from to))))
+
+  (fn caret-line [web i]
+    (caret-unit web i :Line))
+
+  (fn caret-first [web from to]
+    (let [i (caret-step web (- from 1) 1)]
+      (when (and i (< i to)) i)))
+
+  (fn caret-last [web from to]
+    (let [i (caret-step web to -1)]
+      (when (and i (>= i from)) i)))
+
+  (fn caret-at-x [web from to x]
+    "The character of the line from FROM to TO (exclusive) under X, or the
+    nearest one, found by bisecting its characters' left edges."
+    (let [first (caret-first web from to)
+          last (caret-last web from to)
+          left #(let [(_ b) (caret-char web $)] (if b b.x math.huge))]
+      (when (and first last)
+        (var lo first)
+        (var hi last)
+        (while (< lo hi)
+          (let [mid (math.ceil (/ (+ lo hi) 2))]
+            (if (<= (left mid) x)
+                (set lo mid)
+                (set hi (- mid 1)))))
+        (if (caret-stop web lo) lo
+            (or (caret-step web lo -1) first)))))
+
+  (fn caret-from [web i]
+    "I if the cursor can rest there, or the nearest index after it that can."
+    (if (caret-stop web i) i (caret-step web i 1)))
+
+  (fn blank-codepoint? [c]
+    (or (<= c 32) (= c 0xA0) (= c 0x1680) (<= 0x2000 c 0x200B) (= c 0x2028)
+        (= c 0x2029) (= c 0x202F) (= c 0x205F) (= c 0x3000) (= c 0xFEFF)))
+
+  (fn punctuation-codepoint? [c]
+    (or (< c 0xC0) (<= 0x2010 c 0x2BFF) (<= 0x3001 c 0x303F)
+        (<= 0xFE30 c 0xFE4F) (<= 0xFF00 c 0xFF0F) (<= 0xFF1A c 0xFF20)
+        (<= 0xFF3B c 0xFF40) (<= 0xFF5B c 0xFF65)))
+
+  (fn char-class [text big?]
+    "The class, as Vim's word motions see it, of the character TEXT ends with:
+    :blank, or with BIG? :word, or else keyword characters, apart by script
+    as in Vim, or :punct."
+    (let [c (when (and text (not= text ""))
+              (utf8.codepoint text (utf8.offset text -1)))]
+      (if (or (not c) (blank-codepoint? c)) :blank
+          big? :word
+          (< c 0x80) (if (: (string.char c) :find "[%w_]") :word :punct)
+          (punctuation-codepoint? c) :punct
+          (<= 0x3040 c 0x309F) :hiragana
+          (<= 0x30A0 c 0x30FF) :katakana
+          (or (<= 0x3400 c 0x4DBF) (<= 0x4E00 c 0x9FFF) (<= 0xF900 c 0xFAFF)) :han
+          (<= 0xAC00 c 0xD7AF) :hangul
+          (<= 0x1F000 c 0x1FAFF) :emoji
+          :word)))
+
+  (fn word-motion [web i kind big?]
+    "Where Vim's word motion KIND, :w, :b, :e or :ge, takes the cursor from I;
+    with BIG?, W, B, E or gE, by words between blanks. Empty text, where a
+    line wraps or a block ends, is blank."
+    (let [memo {}
+          class (fn [j]
+                  (if (or (< j 0) (>= j state.text-end)) :edge
+                      (do
+                        (when (= nil (. memo j))
+                          (tset memo j (char-class (caret-text web j) big?)))
+                        (. memo j))))
+          delta (if (or (= kind :w) (= kind :e)) 1 -1)]
+      (var j i)
+      (var steps 0)
+      (fn skip [c]
+        (while (and (= (class j) c) (< steps caret-scan-limit))
+          (set j (+ j delta))
+          (set steps (+ steps 1))))
+      (fn extend [c]
+        "Move to the far end, in the direction of the motion, of the run of C."
+        (while (and (= (class (+ j delta)) c) (< steps caret-scan-limit))
+          (set j (+ j delta))
+          (set steps (+ steps 1))))
+      (case kind
+        :w (let [c (class j)]
+             (when (not= c :blank) (skip c))
+             (skip :blank))
+        :ge (let [c (class j)]
+              (when (not= c :blank) (skip c))
+              (skip :blank))
+        _ (do
+            (set j (+ j delta))
+            (skip :blank)
+            (extend (class j))))
+      (when (and (not= (class j) :edge) (not= (class j) :blank)
+                 (< steps caret-scan-limit))
+        (if (caret-stop web j) j (caret-step web j delta)))))
+
+  (fn unit-motion [web i unit forward?]
+    "Vim's ) and ( for UNIT :Sentence, to the next sentence's start or this
+    one's, or the one before if at it; } and { for :Paragraph, to this block's
+    end or start, or the next one's or the one before's if at it."
+    (let [(from to) (caret-unit web i unit)]
+      (when from
+        (if (and forward? (= unit :Sentence))
+            (let [target (caret-from web to)]
+              ;; At a sentence's start, WebKit gives the one before it.
+              (if (and target (> target i)) target
+                  (let [next (caret-step web i 1)
+                        (_ next-to) (when next (caret-unit web next unit))]
+                    (when next-to (caret-from web next-to)))))
+            forward?
+            (let [last (caret-step web to -1)]
+              (if (and last (> last i)) last
+                  (let [next (caret-step web i 1)
+                        (_ next-to) (when next (caret-unit web next unit))]
+                    (when next-to (caret-step web next-to -1)))))
+            (let [first (caret-from web from)]
+              (if (and first (< first i)) first
+                  (let [prev (caret-step web i -1)
+                        (prev-from) (when prev (caret-unit web prev unit))]
+                    (when prev-from (caret-from web prev-from)))))))))
+
+  (fn heading-starts [web]
+    "The indices of the starts of the page's headings, in order."
+    (let [headings (or (param web :AXUIElementsForSearchPredicate
+                              {:AXSearchKey :AXHeadingSearchKey
+                               :AXDirection :AXDirectionNext
+                               :AXResultsLimit -1
+                               :AXVisibleOnly false})
+                       [])
+          starts (icollect [_ heading (ipairs headings)]
+                   (let [range (param web :AXTextMarkerRangeForUIElement heading)]
+                     (when range
+                       (param web :AXIndexForTextMarker (: range :startMarker)))))]
+      (table.sort starts)
+      starts))
+
+  (fn section-motion [web i keys]
+    "Vim's ]] and [[, to the next or previous heading, and ][ and [], to the
+    end of this section or the one before, a section running from a heading
+    to the next; the page's end or start when there is none."
+    (let [starts (heading-starts web)
+          forward? (= (keys:sub 1 1) "]")
+          heading? (= (keys:sub 1 1) (keys:sub 2 2))
+          order (if forward? starts
+                    (fcollect [k (length starts) 1 -1] (. starts k)))
+          found (accumulate [found nil _ start (ipairs order) &until found]
+                  (let [j (if heading? (caret-from web start)
+                              (caret-step web start -1))]
+                    (when (and j (if forward? (> j i) (< j i)))
+                      j)))]
+      (or found
+          (if forward?
+              (caret-step web state.text-end -1)
+              (caret-from web 0)))))
+
+  (fn caret-bounds []
+    (caret-stop state.web state.index))
+
+  (fn caret-viewport []
+    "The part of the page on screen: the scroll area the web area is in."
+    (let [parent (attr state.web :AXParent)
+          frame (if (and parent (= (attr parent :AXRole) :AXScrollArea))
+                    (attr parent :AXFrame)
+                    (attr state.web :AXFrame))]
+      (and frame (intersection frame (screen-clip)))))
+
+  (fn render-caret []
+    (let [bounds (caret-bounds)]
+      (each [_ {: canvas : frame : screen} (ipairs state.canvases)]
+        (let [elements (if (and hud-shown? (= (: screen :id) state.hud-screen))
+                           (hud-elements frame (which-key.bottom-frame screen)
+                                         (.. (case state.visual
+                                               :char "Caret: visual"
+                                               :line "Caret: visual line"
+                                               _ "Caret")
+                                             (if state.pending
+                                                 (.. "  " state.pending)
+                                                 ""))
+                                         palette.caret (caret-bindings state.visual))
+                           [])]
+          (when (and bounds (inside? frame (center bounds)))
+            (table.insert elements
+                          {:type :rectangle :action :strokeAndFill
+                           :frame {:x (- bounds.x frame.x) :y (- bounds.y frame.y)
+                                   :w bounds.w :h bounds.h}
+                           ;; Outlined in dark to show on light pages too.
+                           :fillColor {:hex palette.cursor :alpha 0.75}
+                           :strokeColor {:hex palette.border}
+                           :strokeWidth 1.5}))
+          (: canvas :replaceElements elements)))))
+
+  (fn reveal-caret []
+    "Scroll the page so that a few lines around the cursor show."
+    (let [bounds (caret-bounds)
+          view (caret-viewport)]
+      (when (and bounds view)
+        (let [margin (* 3 bounds.h)
+              above (- (+ view.y margin) bounds.y)
+              below (- (+ bounds.y bounds.h margin) (+ view.y view.h))
+              dy (if (> above 0) above (> below 0) (- below) 0)]
+          (when (not= dy 0)
+            (scroll-at (center view) 0 dy))))))
+
+  (fn caret-selection []
+    "The start and end (exclusive) of the text selected from the anchor to the
+    cursor, both included, or the whole lines they are on."
+    (let [web state.web
+          lo (math.min state.anchor state.index)
+          hi (math.max state.anchor state.index)]
+      (if (= state.visual :line)
+          (let [(from) (caret-line web lo)
+                (_ to) (caret-line web hi)]
+            (values (or from lo) (or to (+ hi 1))))
+          (values lo (+ hi 1)))))
+
+  (fn select-caret-range []
+    "Select the page's text from the anchor to the cursor."
+    (let [(from to) (caret-selection)
+          range (index-range state.web from to)]
+      (when range
+        (pcall #(: state.web :setAttributeValue :AXSelectedTextMarkerRange range)))))
+
+  (fn move-caret [i ?goal-x]
+    "Put the cursor on I; ?GOAL-X is the column vertical moves keep to."
+    (when i
+      (set state.index i)
+      (set state.goal-x ?goal-x)
+      (when state.visual
+        (select-caret-range))
+      (reveal-caret)
+      (render-caret)))
+
+  (fn set-visual [kind]
+    "Select by KIND, :char or :line, from the cursor on, or switch to it while
+    selecting; KIND again, or nil, stops selecting."
+    (if (or (not kind) (= kind state.visual))
+        (do
+          (set state.visual nil)
+          (deselect-web state.web))
+        (do
+          (when (not state.visual)
+            (set state.anchor state.index)
+            ;; Focused, the page shows the selection as active.
+            (pcall #(: state.web :setAttributeValue :AXFocused true)))
+          (set state.visual kind)
+          (select-caret-range)))
+    (render-caret))
+
+  (fn yank-selection []
+    "Copy the selected text and stop selecting, the cursor at its start, as
+    Vim does."
+    (let [(from to) (caret-selection)
+          range (index-range state.web from to)
+          start (math.min state.anchor state.index)]
+      (copy-text (let [text (and range (param state.web :AXStringForTextMarkerRange
+                                              range))]
+                   ;; Lines end with one line break, however far apart blocks are.
+                   (if (and text (= state.visual :line)) (pick-values 1 (text:gsub "\n+$" "\n"))
+                       text)))
+      (set state.index start)
+      (set state.goal-x nil)
+      (set-visual nil)))
+
+  (fn swap-caret-ends []
+    (let [anchor state.anchor]
+      (set state.anchor state.index)
+      (move-caret anchor)))
+
+  (fn caret-vertical [direction]
+    "Move the cursor a line down (DIRECTION 1) or up (-1), keeping to its
+    column."
+    (let [web state.web
+          bounds (caret-bounds)
+          goal (or state.goal-x (and bounds (+ bounds.x (/ bounds.w 2))))
+          (from to) (caret-line web state.index)
+          next (when from
+                 (if (> direction 0)
+                     (caret-step web (- to 1) 1)
+                     (caret-step web from -1)))
+          (next-from next-to) (when next (caret-line web next))]
+      (when (and goal next-from)
+        (move-caret (or (caret-at-x web next-from next-to goal) next) goal))))
+
+  (fn caret-line-end [end?]
+    (let [(from to) (caret-line state.web state.index)]
+      (when from
+        (if end?
+            (move-caret (caret-last state.web from to) math.huge)
+            (move-caret (caret-first state.web from to))))))
+
+  (local shifted-keys {"9" "(" "0" ")" "[" "{" "]" "}" "4" "$" "/" "?"})
+
+  (fn typed-key [event]
+    "What a key event types on a US layout, as Vim names keys, or nil when
+    Cmd, Ctrl or Alt is held."
+    (let [key (. hs.keycodes.map (: event :getKeyCode))
+          flags (: event :getFlags)]
+      (when (and key (not (or flags.cmd flags.ctrl flags.alt)))
+        (if (not flags.shift) key
+            (. shifted-keys key) (. shifted-keys key)
+            (= (length key) 1) (key:upper)))))
+
+  (local caret-motions
+         {:h #(caret-step $1 $2 -1)
+          :l #(caret-step $1 $2 1)
+          :w #(word-motion $1 $2 :w)
+          :b #(word-motion $1 $2 :b)
+          :e #(word-motion $1 $2 :e)
+          :ge #(word-motion $1 $2 :ge)
+          :W #(word-motion $1 $2 :w true)
+          :B #(word-motion $1 $2 :b true)
+          :E #(word-motion $1 $2 :e true)
+          :gE #(word-motion $1 $2 :ge true)
+          ")" #(unit-motion $1 $2 :Sentence true)
+          "(" #(unit-motion $1 $2 :Sentence false)
+          "}" #(unit-motion $1 $2 :Paragraph true)
+          "{" #(unit-motion $1 $2 :Paragraph false)
+          "]]" #(section-motion $1 $2 "]]")
+          "[[" #(section-motion $1 $2 "[[")
+          "][" #(section-motion $1 $2 "][")
+          "[]" #(section-motion $1 $2 "[]")})
+
+  (local caret-prefixes {:g true "[" true "]" true})
+
+  (fn on-caret-key [event]
+    "Vim's motions move the cursor: h/l a character, j/k a line, 0/$ to the
+    line's ends, w/b/e/ge and W/B/E/gE by words, )/( by sentences, }/{ by
+    paragraphs and ]]/[[/][/[] by sections, from heading to heading. v
+    selects from the cursor by characters and V by lines, y copies the
+    selection, o goes to its other end and ESC stops selecting. ESC when not
+    selecting, C-g or q leaves. Other keys, Cmd-c say, leave caret mode,
+    keeping the selection, and go through."
+    (let [key (. hs.keycodes.map (: event :getKeyCode))
+          flags (: event :getFlags)
+          typed (typed-key event)
+          pending state.pending
+          keys (if pending (.. pending (or typed "")) typed)
+          motion (and keys (. caret-motions keys))]
+      (set state.pending nil)
+      (if (and flags.ctrl (= key :g)) (do (hide-hints) true)
+          motion (do (move-caret (motion state.web state.index)) true)
+          ;; Any other key after a prefix only cancels it, as in Vim.
+          pending (do (render-caret) true)
+          (and typed (. caret-prefixes typed))
+          (do (set state.pending typed) (render-caret) true)
+          (= key :escape) (do (if state.visual (set-visual nil) (hide-hints)) true)
+          (= typed :q) (do (hide-hints) true)
+          (= typed :v) (do (set-visual :char) true)
+          (= typed :V) (do (set-visual :line) true)
+          (and (= typed :y) state.visual) (do (yank-selection) true)
+          (and (= typed :o) state.visual) (do (swap-caret-ends) true)
+          (= typed :j) (do (caret-vertical 1) true)
+          (= typed :k) (do (caret-vertical -1) true)
+          (= typed :0) (do (caret-line-end false) true)
+          (= typed "$") (do (caret-line-end true) true)
+          (= typed "?") (do (toggle-hud) (render-caret) true)
+          (do (hide-hints) false))))
+
+  (fn [hint]
+    "Put a cursor at the start of HINT, a web text line, to move it with
+    the keyboard."
+    (hide-hints)
+    (let [web hint.web?
+          start (and web hint.start (param web :AXIndexForTextMarker hint.start))
+          text-end (and web (param web :AXIndexForTextMarker
+                                   (attr web :AXEndTextMarker)))]
+      (if (not (and start text-end))
+          (minibuffer.message "The caret only works on web pages for now")
+          (do
+            (set state {:web web
+                        :index start
+                        :text-end text-end
+                        :hud-screen (: (hs.screen.mainScreen) :id)
+                        :canvases (make-canvases)
+                        :tap (hs.eventtap.new [types.keyDown] on-caret-key)})
+            (when (not (caret-stop web start))
+              (set state.index (or (caret-step web start 1) start)))
+            ;; The cursor follows the page as it scrolls by other means.
+            (set state.follower (hs.timer.doEvery caret-follow-interval
+                                                  render-caret))
+            (render-caret)
+            (: state.tap :start))))))
+
+(set caret-mode (define-caret-mode))
 
 {: show-hints
  : hide-hints

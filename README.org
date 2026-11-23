@@ -36,18 +36,26 @@ Type a label to act on it:
 | =h= before the last char | press and hold (0.5s), e.g. Safari's speaker button menu  |
 |                          | with "Enter Picture in Picture"                           |
 | =v= before the last char | move the pointer there without clicking                   |
+| =g= before the last char | drag: pick what, then where to (a second label); its last |
+|                          | char's modifiers are held, e.g. =Alt= to copy a file      |
+| =y= before the last char | copy text: labels go over text, a line at a time on web   |
+|                          | pages; pick where it starts, then where it ends           |
+| =Shift-V=, then a label  | caret mode: a cursor at the start of that web text line   |
 | =Shift-P=                | park: labels turn peach and stay after each action (e.g.  |
 |                          | =Cmd= + labels to select several files); =Shift-P= leaves |
 | =/=                      | switch to the minibuffer search (=Ctrl-Alt-SPC=, below)   |
 | =TAB=                    | switch to scroll mode (below); =TAB= there switches back  |
 | =?=                      | show or hide the bindings HUD (in scroll mode too)        |
-| =DEL=                    | delete the last typed character                           |
+| =DEL=                    | delete the last typed character, or the first pick        |
+| =x=                      | clear the text selected in web pages on screen and in the |
+|                          | focused text field                                        |
 | =ESC=, =C-g=, hotkey     | cancel; any other key cancels and goes through            |
 
 The action keys combine with modifiers (=r= then =Cmd= + the last char is a
 Cmd right click); typing one again goes back to a plain click. While one is
 pending, the labels and the HUD title take its colour: sky blue for right click,
-green for double click, pink for hold and yellow for hover. At the start of
+green for double click, pink for hold, yellow for hover, blue for drag and red
+for copy. At the start of
 a label, a modified key bound as a Hammerspoon hotkey, e.g. =Ctrl-Alt-SPC=,
 closes the hints and goes through; past the start, a modified label character
 is part of the label.
@@ -57,6 +65,54 @@ lists these bindings; its title names the chosen action and turns peach while
 parked. Labels are drawn over it, so elements behind it can still be picked.
 Once hidden with =?=, it stays hidden until =?= shows it again. It and the
 other overlays at the bottom (which-key, the minibuffer) draw over the Dock.
+
+=g= and =y= take two picks; the first stays outlined until the second, and
+picking the same label twice copies just that text. A drag also labels text and
+images, which may be draggable or drop zones (HTML5 drag and drop works), and
+named lists, such as the days of Calendar's month view (labelled and dropped on
+along their bottom, below their events, so an event can be moved to another
+day), and
+leaves the windows where they are. Selected web text (e.g. by =y=) can be dragged
+too; web text that can't be dragged gets selected instead, and stays selected,
+e.g. for =Cmd-c=. Copying selects web text in the page (via
+text markers), focusing it, so =Shift= with the arrow keys can extend the
+selection before copying again; other text (labels, text fields) is copied whole,
+every labelled text from the first pick through the second joined by newlines.
+
+=Shift-V= starts caret mode, after Vimium's: the labels go over web text a line
+at a time, and picking one puts a block cursor (rosewater, outlined) at its
+start. =h=/=l= move it a character, =j=/=k= a line on screen, wrapped or not,
+keeping to its column, and =0=/=$= to the line's start and end; line breaks
+and the gaps between blocks are skipped. Vim's other motions work too:
+
+- =w=, =b=, =e= and =ge= by words, telling keywords, punctuation and scripts
+  (kanji, kana, hangul) apart as Vim does, and =W=, =B=, =E= and =gE= by words
+  between blanks;
+- =)= and =(= to the next and previous sentence;
+- =}= and ={= to the end and start of the paragraph (a block on the page: a
+  paragraph, heading or list item), or of the next or previous one when
+  already there, since the cursor cannot rest on the gaps between blocks
+  that Vim's would go to;
+- =]]= and =[[= to the next and previous heading, and =][= and =[]= to the end
+  of the section (from a heading to the next) and of the previous one; the
+  page's end or start when there are no more. A key after =g=, =[= or =]= that
+  makes no motion cancels it.
+
+The page scrolls to keep a few lines around the cursor in view, and the cursor
+follows the page when it is scrolled otherwise. =?= hides the HUD; =ESC=, =C-g= or =q= leaves, and any other key
+leaves and goes through. Only web pages (text markers) are supported so far.
+
+Visual selection works as in Vim: =v= selects from the character under the
+cursor and =V= whole lines (lines on screen, as =j=/=k= move), and the moves
+above extend it. =v= and =V= switch between the two, or stop selecting when
+pressed again; =o= jumps to the other end, =y= copies the selection, stops
+selecting and puts the cursor at its start, and =ESC= stops selecting without
+leaving. Leaving with =C-g=, =q= or a key that goes through (e.g. =Cmd-C=)
+keeps the selection.
+
+When a full screen app hides the menu bar, its status items are labelled where
+they show once it comes back; picking one presses it through Accessibility,
+which brings the bar back and opens the item.
 
 Synthetic clicks are posted with exactly the intended modifiers (keys still held
 from the hotkey are ignored), and the pointer is put back afterwards.
