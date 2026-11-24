@@ -342,8 +342,11 @@ restoring a layout; a change that moved several windows undoes in one step.
 =p= (=split-view.fnl=) reads the left window, then the right one, from every
 Space, and tiles them in macOS' Split View: a new full-screen Space with the two
 side by side. It leaves full screen first, brings the right window over from
-another desktop, and picks it in the system's chooser. It uses the app's
-=Window › Full Screen Tile= menu item, so apps without it can't be paired. =[= and
+another desktop, and picks it in the system's chooser. It tiles with the app's
+=Window › Full Screen Tile= menu item or, for apps without one (Emacs), the green
+button's menu. An Emacs frame in its own full screen (the Mac port's
+=toggle-frame-fullscreen=), which has no title bar, is first taken out of it
+through =emacsclient=, so the Emacs server must be running. =[= and
 =]= move the separator a 32nd of the screen, in Split View or between two windows
 tiled side by side (the latter undoable).
 

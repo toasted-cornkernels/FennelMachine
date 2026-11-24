@@ -25,6 +25,8 @@ window shares with a window beside it.
 (local spaces (require :spaces))
 
 (local menu-path ["Window" "Full Screen Tile" "Left of Screen"])
+;; The same item in the green button's menu, for apps without the former.
+(local button-item "Left of Screen")
 ;; The separator moves by this share of the screen's width.
 (local separator-step (/ 1 32))
 ;; How far apart two windows' edges may be to count as shared; Split View
@@ -94,15 +96,67 @@ window shares with a window beside it.
                                        " out of full screen"))))
               #(fail (.. "Couldn't get to " (name-of win)))))
 
+(fn green-button [win]
+  (let [ax (hs.axuielement.windowElement win)]
+    (and ax (or ax.AXFullScreenButton ax.AXZoomButton))))
+
+(fn emacsclient []
+  (accumulate [found nil _ path (ipairs ["/usr/local/bin/emacsclient"
+                                         "/opt/homebrew/bin/emacsclient"
+                                         (.. (os.getenv :HOME)
+                                             "/.nix-profile/bin/emacsclient")
+                                         "/run/current-system/sw/bin/emacsclient"])
+               &until found]
+    (when (hs.fs.attributes path) path)))
+
+(fn elisp-string [text]
+  (.. "\"" (-> text (: :gsub "\\" "\\\\") (: :gsub "\"" "\\\"")) "\""))
+
+(fn leave-emacs-full-screen [win k]
+  "Turn off the Emacs frame WIN's own full screen (`toggle-frame-fullscreen'
+  on the Mac port), which has no title bar to tile it by. Emacs makes a new
+  window for the frame, so call K with that one."
+  (let [title (win:title)
+        app (win:application)
+        client (emacsclient)
+        form (.. "(let ((f (seq-find (lambda (f) (member " (elisp-string title)
+                 " (list (frame-parameter f 'title) (frame-parameter f 'name))))"
+                 " (frame-list))))"
+                 " (when (and f (frame-parameter f 'fullscreen))"
+                 " (set-frame-parameter f 'fullscreen nil) t))")
+        new #(accumulate [found nil _ w (ipairs (app:allWindows)) &until found]
+               (when (and (= (w:title) title) (green-button w)) w))]
+    (if (not client)
+        (fail "Couldn't find emacsclient")
+        (do
+          (var found nil)
+          (: (hs.task.new client
+                          (fn [code]
+                            (if (= code 0)
+                                (wait-until #(do (set found (new)) found) 3
+                                            #(after 0.3 #(k found))
+                                            #(fail (.. "Couldn't take " title
+                                                       " out of full screen")))
+                                (fail "emacsclient failed; is the server running?")))
+                          ["-e" form])
+             :start)))))
+
 (fn show [win k]
-  "Unhide, unminimize and take WIN out of full screen, then call K."
+  "Unhide, unminimize and take WIN out of full screen, then call K with it
+  (a new window, when an app had to remake it)."
   (let [app (win:application)]
     (when (and app (app:isHidden)) (app:unhide))
     (when (win:isMinimized) (win:unminimize))
     (if (win:isFullScreen)
-        (leave-full-screen win k)
+        (leave-full-screen win #(k win))
         (wait-until #(and (not (win:isMinimized)) (user-space? (space-of win)))
-                    3 k #(fail (.. "Couldn't show " (name-of win)))))))
+                    3
+                    #(if (green-button win)
+                         (k win)
+                         (= (-?> app (: :bundleID)) :org.gnu.Emacs)
+                         (leave-emacs-full-screen win k)
+                         (fail (.. (name-of win) " has no title bar to tile it by")))
+                    #(fail (.. "Couldn't show " (name-of win)))))))
 
 (fn grip [win]
   "A point of WIN's title bar to drag it by: one where Accessibility finds
@@ -202,6 +256,49 @@ window shares with a window beside it.
      (hs.eventtap.keyStroke [] :escape 0)
      (fail (.. "macOS didn't offer " (name-of right))))))
 
+(fn find-item [e title depth]
+  (if (and (= e.AXRole :AXMenuItem) (= e.AXTitle title))
+      e
+      (< 0 depth)
+      (accumulate [found nil _ c (ipairs (or e.AXChildren [])) &until found]
+        (find-item c title (- depth 1)))))
+
+(fn menu-below [button]
+  "The menu a button just showed below itself, by hit-testing there: it isn't
+  always among the button's children."
+  (let [p button.AXPosition
+        hit (accumulate [found nil _ dy (ipairs [24 40 56 72]) &until found]
+              (let [e (and p (hs.axuielement.systemElementAtPosition
+                              (+ p.x 4) (+ p.y dy)))]
+                (when (and e (= e.AXRole :AXMenuItem)) e)))]
+    (var menu nil)
+    (var e hit)
+    (while e
+      (when (= e.AXRole :AXMenu) (set menu e))
+      (set e e.AXParent))
+    menu))
+
+(fn tile-left [win k]
+  "Tile WIN to the left of a new full-screen Space, through the Window menu
+  or, failing that, its green button's menu. Then call K."
+  (if (: (win:application) :selectMenuItem menu-path)
+      (k)
+      (let [button (green-button win)
+            cannot #(fail (.. (name-of win) " can't be tiled in full screen"))]
+        (var item nil)
+        (if (not button)
+            (cannot)
+            (do
+              ;; It reports failure even as the menu opens.
+              (button:performAction :AXShowMenu)
+              (wait-until #(do (set item (or (find-item button button-item 6)
+                                             (-?> (menu-below button)
+                                                  (find-item button-item 3))))
+                               item)
+                          1.5
+                          #(do (item:performAction :AXPress) (k))
+                          #(do (hs.eventtap.keyStroke [] :escape 0) (cannot))))))))
+
 (fn tile [left right]
   "Tile LEFT to the left in full screen and pick RIGHT for the other side."
   ;; Focused last but one, it comes first among the thumbnails.
@@ -209,10 +306,7 @@ window shares with a window beside it.
   (left:focus)
   (wait-until
    #(same? (hs.window.focusedWindow) left) 2
-   (fn []
-     (if (not (: (left:application) :selectMenuItem menu-path))
-         (fail (.. (name-of left) " can't be tiled in full screen"))
-         (click-thumbnail left right 2)))
+   #(tile-left left #(click-thumbnail left right 2))
    #(fail (.. "Couldn't focus " (name-of left)))))
 
 (fn pair-windows [left right]
@@ -220,15 +314,16 @@ window shares with a window beside it.
   own."
   (show
    left
-   #(show
-     right
-     (fn []
-       (let [space (space-of left)]
-         (if (= (space-of right) space)
-             (tile left right)
-             (not= (: (left:screen) :id) (: (right:screen) :id))
-             (fail (.. (name-of right) " is on another screen"))
-             (bring-to-space right space #(tile left right))))))))
+   (fn [left]
+     (show
+      right
+      (fn [right]
+        (let [space (space-of left)]
+          (if (= (space-of right) space)
+              (tile left right)
+              (not= (: (left:screen) :id) (: (right:screen) :id))
+              (fail (.. (name-of right) " is on another screen"))
+              (bring-to-space right space #(tile left right)))))))))
 
 (fn candidates [wins]
   (icollect [_ w (ipairs wins)] (buffers.candidate w)))
