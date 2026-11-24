@@ -68,6 +68,13 @@ window shares with a window beside it.
 (fn same? [a b]
   (and a b (= (a:id) (b:id))))
 
+(fn return-pointer [point]
+  "Move the pointer back to POINT with a real mouse-moved event: warping it
+  there leaves the system believing it's where it was, e.g. still at the top
+  edge, keeping the menu bar and a full-screen title bar revealed."
+  (: (hs.eventtap.event.newMouseEvent hs.eventtap.event.types.mouseMoved point)
+     :post))
+
 (fn name-of [win]
   (let [title (win:title)]
     (if (= title "") (or (-?> (win:application) (: :name)) "window") title)))
@@ -208,14 +215,14 @@ window shares with a window beside it.
                               (: (hs.eventtap.event.newMouseEvent types.leftMouseUp
                                                                   dragged)
                                  :post)
-                              (hs.mouse.absolutePosition mouse)
+                              (return-pointer mouse)
                               (wait-until #(= (space-of win) space) 1.5 k
                                           #(fail (.. "Couldn't bring " (name-of win)
                                                      " to this desktop"))))))
                    (fn []
                      (: (hs.eventtap.event.newMouseEvent types.leftMouseUp dragged)
                         :post)
-                     (hs.mouse.absolutePosition mouse)
+                     (return-pointer mouse)
                      (fail "Couldn't switch desktops")))))
    #(fail (.. "Couldn't get to " (name-of win)))))
 
@@ -252,7 +259,7 @@ window shares with a window beside it.
    (fn []
      (let [mouse (hs.mouse.absolutePosition)]
        (hs.eventtap.leftClick spot)
-       (hs.mouse.absolutePosition mouse))
+       (return-pointer mouse))
      (wait-until #(paired? left right) 3
                  (fn []
                    (left:focus)
@@ -420,21 +427,30 @@ window shares with a window beside it.
         first (hs.axuielement.systemElementAtPosition x (+ top 2))]
     (var found nil)
     (when (and first (first.AXRole:match "^AXMenuBar"))
-      (for [y (+ top 6) (+ top 120) 4 &until found]
+      ;; Scan from the bar's bottom: until it has slid in, the window
+      ;; itself answers up there.
+      (for [y (+ top (math.max 24 (or (-?> first.AXFrame (. :h)) 0))) (+ top 120) 4
+            &until found]
         (let [e (hs.axuielement.systemElementAtPosition x y)
               role (and e e.AXRole)]
           (when (and role (not (role:match "^AXMenu")) (. title-bar-roles role)
                      (same? (-?> (if (= role :AXWindow) e e.AXWindow)
                                  (: :asHSWindow))
                             win))
-            (set found {: x : y})))))
+            ;; A little inside it: its top edge borders the menu bar.
+            (set found {: x :y (+ y 6)})))))
     found))
 
 (fn drag [from to k]
   "Drag the mouse with the left button from FROM to TO, then call K."
   (let [types hs.eventtap.event.types
         post #(: (hs.eventtap.event.newMouseEvent $1 $2) :post)
-        steps 20]
+        steps 30]
+    ;; Glide down from the top edge, as jumping off it can hide the
+    ;; menu bar and the title bar with it.
+    (for [y (math.max 0 (- from.y 30)) from.y 2]
+      (post types.mouseMoved {:x from.x : y})
+      (hs.timer.usleep 10000))
     (post types.mouseMoved from)
     (hs.timer.usleep 200000)
     (post types.leftMouseDown from)
@@ -443,7 +459,7 @@ window shares with a window beside it.
       (post types.leftMouseDragged
             {:x (+ from.x (* (- to.x from.x) (/ i steps)))
              :y (+ from.y (* (- to.y from.y) (/ i steps)))})
-      (hs.timer.usleep 40000))
+      (hs.timer.usleep 30000))
     ;; Let Split View make room before dropping.
     (after 1 #(do (post types.leftMouseUp to) (k)))))
 
@@ -459,7 +475,7 @@ window shares with a window beside it.
               lf (left:frame)
               rf (right:frame)
               x (+ lf.x (/ lf.w 2))
-              done #(do (hs.mouse.absolutePosition mouse) (win:focus))]
+              done #(do (return-pointer mouse) (win:focus))]
           (var at nil)
           ;; Reveal the menu bar and, under it, the title bar.
           (: (hs.eventtap.event.newMouseEvent hs.eventtap.event.types.mouseMoved
@@ -467,14 +483,16 @@ window shares with a window beside it.
              :post)
           (wait-until
            #(do (set at (title-bar-point left x)) at) 3
-           #(drag at {:x (+ rf.x (/ rf.w 2)) :y (+ at.y 200)}
-                  #(wait-until #(> (. (left:frame) :x) (. (right:frame) :x)) 3
-                               (fn []
-                                 (done)
-                                 (minibuffer.message
-                                  (.. "Swapped " (name-of right) " | "
-                                      (name-of left))))
-                               #(do (done) (fail "Couldn't swap them"))))
+           ;; Accessibility has it before it has slid into place.
+           #(after 1
+                   #(drag at {:x (+ rf.x (/ rf.w 2)) :y (+ at.y 200)}
+                          #(wait-until #(> (. (left:frame) :x) (. (right:frame) :x)) 3
+                                       (fn []
+                                         (done)
+                                         (minibuffer.message
+                                          (.. "Swapped " (name-of right) " | "
+                                              (name-of left))))
+                                       #(do (done) (fail "Couldn't swap them")))))
            #(do (done) (fail "Couldn't find the title bar")))))))
 
 {: pair
