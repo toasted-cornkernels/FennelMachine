@@ -41,21 +41,26 @@ Bluetooth. Each echoes the new state; turning a connection off asks first."
                 end tell")]
     (minibuffer.message (.. "Dark mode " (on-off dark?)))))
 
+(fn toggle-dock-preference [property label]
+  "Flip the Dock preference PROPERTY (e.g. autohide) in a separate osascript.
+  Run inside Hammerspoon, apps (Hammerspoon itself, sometimes Emacs) can be
+  left with the screen's usable area from before the change, so that windows
+  stop short of the space the menu bar freed."
+  (: (hs.task.new "/usr/bin/osascript"
+                  (fn [_ out]
+                    (minibuffer.message
+                     (.. label " " (on-off (= (out:match "%S+") "true")))))
+                  ["-e" (.. "tell application \"System Events\" to tell dock preferences
+                               set " property " to not " property "
+                               return " property "
+                             end tell")])
+     :start))
+
 (fn toggle-dock-autohide []
-  (let [hidden? (system-events
-                 "tell dock preferences
-                    set autohide to not autohide
-                    return autohide
-                  end tell")]
-    (minibuffer.message (.. "Dock hiding " (on-off hidden?)))))
+  (toggle-dock-preference "autohide" "Dock hiding"))
 
 (fn toggle-menu-bar-autohide []
-  (let [hidden? (system-events
-                 "tell dock preferences
-                    set autohide menu bar to not autohide menu bar
-                    return autohide menu bar
-                  end tell")]
-    (minibuffer.message (.. "Menu bar hiding " (on-off hidden?)))))
+  (toggle-dock-preference "autohide menu bar" "Menu bar hiding"))
 
 (fn toggle-hidden-files []
   "Show or hide dotfiles in Finder, which has to relaunch to notice."

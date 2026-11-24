@@ -85,6 +85,46 @@
 ;; Each adjustment takes the focused window's frame and its screen's
 ;; usable frame (excluding menu bar and Dock) and returns the target frame.
 
+(fn bar-settings []
+  "Whether the menu bar and the Dock hide, and the Dock's side. Asked of
+  cfprefsd through defaults: the plist files lag behind."
+  (let [(out) (hs.execute
+               (.. "/usr/bin/defaults read -g _HIHideMenuBar 2>/dev/null; echo ';'; "
+                   "/usr/bin/defaults read com.apple.dock autohide 2>/dev/null; echo ';'; "
+                   "/usr/bin/defaults read com.apple.dock orientation 2>/dev/null"))
+        [menu dock side] (icollect [field (string.gmatch (.. out ";") "([^;]*);")]
+                           (field:match "^%s*(.-)%s*$"))]
+    {:menu-hidden? (= menu "1")
+     :dock-hidden? (= dock "1")
+     :dock-side (if (or (= side nil) (= side "")) :bottom side)}))
+
+(fn menu-bar-height []
+  (or (-?> (hs.application.frontmostApplication)
+           (hs.axuielement.applicationElement)
+           (. :AXMenuBar)
+           (. :AXFrame)
+           (. :h))
+      30))
+
+(fn usable-frame [screen]
+  "SCREEN's frame minus the menu bar and the Dock where they aren't hidden.
+  Hammerspoon's screen:frame() can keep the insets of a menu bar or Dock that
+  has since been set to hide (or shown again), so go by the settings."
+  (let [full (screen:fullFrame)
+        cached (screen:frame)
+        {: menu-hidden? : dock-hidden? :dock-side side} (bar-settings)
+        top (if menu-hidden? full.y
+                (> cached.y full.y) cached.y
+                (+ full.y (menu-bar-height)))
+        left (if (and dock-hidden? (= side :left)) full.x cached.x)
+        right (if (and dock-hidden? (= side :right))
+                  (+ full.x full.w)
+                  (+ cached.x cached.w))
+        bottom (if (and dock-hidden? (= side :bottom))
+                   (+ full.y full.h)
+                   (+ cached.y cached.h))]
+    (hs.geometry.rect left top (- right left) (- bottom top))))
+
 (fn nudge [dx dy dw dh]
   (fn [window-frame]
     (set window-frame.x (+ window-frame.x dx))
@@ -129,7 +169,7 @@
         :resize-half-bottom (unit-rect [0 0.5 1 0.5])})
 
 (fn target-frame [window window-adjustment]
-  (window-adjustment (window:frame) (: (window:screen) :frame)))
+  (window-adjustment (window:frame) (usable-frame (window:screen))))
 
 (fn apply-once [window-adjustment]
   "Apply `window-adjustment` to the focused window a single time."
@@ -314,7 +354,7 @@
         n (length wins)]
     (if (= n 0)
         (minibuffer.message "No windows to tile")
-        (let [sf (screen:frame)
+        (let [sf (usable-frame screen)
               cols (if (<= n 3) n (math.ceil (math.sqrt n)))
               rows (math.ceil (/ n cols))
               h (/ sf.h rows)]
@@ -338,7 +378,7 @@
             (or found (when (and a (not= (w:id) (a:id)) (w:isStandard)) w)))]
     (if (not (and a b))
         (minibuffer.message "Need two windows to split")
-        (let [sf (: (a:screen) :frame)]
+        (let [sf (usable-frame (a:screen))]
           (: history :push [a b])
           (if side-by-side?
               (do (a:setFrame {:x sf.x :y sf.y :w (/ sf.w 2) :h sf.h})
@@ -655,5 +695,6 @@
                 : set-mouse-cursor-at
                 : show-display-numbers
                 : show-grid
+                : usable-frame
                 : undo}]
   name f)
