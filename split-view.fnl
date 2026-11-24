@@ -1,0 +1,308 @@
+"
+Split View: two windows side by side in a full-screen Space of their own, and
+the separator between them moved by keyboard.
+
+`pair` reads the left window and then the right one in the minibuffer, like
+switch-to-buffer. macOS has no API to pair windows, so it goes the way a
+user would: it tiles the left one with Window › Full Screen Tile › Left of
+Screen, which shows the other windows of its desktop as thumbnails on the
+right, and clicks the right one's. The thumbnails are found by asking
+Accessibility which window is at each point of that half, as each stands for
+its window there.
+
+Only windows of the left one's desktop are offered, so the right one is
+brought there first: out of full screen, unminimized, and, from another
+desktop, held by its title bar while switching desktops, the way one drags a
+window across them (hs.spaces.moveWindowToSpace no longer works).
+
+`move-separator-left` / `-right` resize the left window of the pair, the
+right one following; outside Split View, they move the edge the focused
+window shares with a window beside it.
+"
+
+(local minibuffer (require :lib.minibuffer))
+(local buffers (require :buffers))
+(local spaces (require :spaces))
+
+(local menu-path ["Window" "Full Screen Tile" "Left of Screen"])
+;; The separator moves by this share of the screen's width.
+(local separator-step (/ 1 32))
+;; How far apart two windows' edges may be to count as shared; Split View
+;; keeps a gap of a dozen points for its separator.
+(local edge-slack 24)
+(local scan-step 32)
+(local poll-interval 0.1)
+
+;; Kept here so that pending timers aren't garbage collected.
+(var poller nil)
+
+(fn stop []
+  (when poller
+    (poller:stop)
+    (set poller nil)))
+
+(fn wait-until [ready? timeout on-ready on-timeout]
+  "Call ON-READY once READY? is true, checking every poll-interval, or
+  ON-TIMEOUT after TIMEOUT seconds."
+  (stop)
+  (let [started (hs.timer.secondsSinceEpoch)]
+    (set poller
+         (hs.timer.doEvery
+          poll-interval
+          (fn []
+            (if (ready?)
+                (do (stop) (on-ready))
+                (> (- (hs.timer.secondsSinceEpoch) started) timeout)
+                (do (stop) (when on-timeout (on-timeout)))))))))
+
+(fn after [seconds f]
+  (stop)
+  (set poller (hs.timer.doAfter seconds #(do (set poller nil) (f)))))
+
+(fn fail [text]
+  (stop)
+  (minibuffer.message text))
+
+(fn same? [a b]
+  (and a b (= (a:id) (b:id))))
+
+(fn name-of [win]
+  (let [title (win:title)]
+    (if (= title "") (or (-?> (win:application) (: :name)) "window") title)))
+
+(fn space-of [win]
+  (. (or (hs.spaces.windowSpaces win) []) 1))
+
+(fn user-space? [space]
+  (and space (= (hs.spaces.spaceType space) :user)))
+
+;; Getting the windows ready ========================
+;; ==================================================
+
+(fn leave-full-screen [win k]
+  "Take WIN out of full screen, from its own Space, then call K."
+  (win:focus)
+  (wait-until #(= (hs.spaces.focusedSpace) (space-of win)) 3
+              (fn []
+                (win:setFullScreen false)
+                (wait-until #(and (not (win:isFullScreen))
+                                  (user-space? (space-of win)))
+                            5
+                            ;; Let the animation end.
+                            #(after 0.5 k)
+                            #(fail (.. "Couldn't take " (name-of win)
+                                       " out of full screen"))))
+              #(fail (.. "Couldn't get to " (name-of win)))))
+
+(fn show [win k]
+  "Unhide, unminimize and take WIN out of full screen, then call K."
+  (let [app (win:application)]
+    (when (and app (app:isHidden)) (app:unhide))
+    (when (win:isMinimized) (win:unminimize))
+    (if (win:isFullScreen)
+        (leave-full-screen win k)
+        (wait-until #(and (not (win:isMinimized)) (user-space? (space-of win)))
+                    3 k #(fail (.. "Couldn't show " (name-of win)))))))
+
+(fn grip [win]
+  "A point of WIN's title bar to drag it by: one where Accessibility finds
+  the window itself, its toolbar or its title, rather than a control."
+  (let [f (win:frame)]
+    (var found nil)
+    (each [_ dy (ipairs [6 12 18]) &until found]
+      (for [x (+ f.x 90) (- (+ f.x f.w) 20) 16 &until found]
+        (let [e (hs.axuielement.systemElementAtPosition x (+ f.y dy))
+              role (and e e.AXRole)]
+          (when (and (or (= role :AXWindow) (= role :AXToolbar)
+                         (= role :AXStaticText))
+                     (same? (-?> (if (= role :AXWindow) e e.AXWindow)
+                                 (: :asHSWindow))
+                            win))
+            (set found {: x :y (+ f.y dy)})))))
+    (or found {:x (+ f.x (/ f.w 2)) :y (+ f.y 6)})))
+
+(fn bring-to-space [win space k]
+  "Move WIN to the desktop SPACE: hold it by its title bar, switch to SPACE,
+  let go. Then call K."
+  (win:focus)
+  (wait-until
+   #(= (hs.spaces.focusedSpace) (space-of win)) 3
+   (fn []
+     (let [types hs.eventtap.event.types
+           mouse (hs.mouse.absolutePosition)
+           at (grip win)
+           dragged {:x (+ at.x 1) :y at.y}]
+       (: (hs.eventtap.event.newMouseEvent types.leftMouseDown at) :post)
+       (hs.timer.usleep 100000)
+       (: (hs.eventtap.event.newMouseEvent types.leftMouseDragged dragged) :post)
+       (hs.timer.usleep 100000)
+       (spaces.goto-space space)
+       (wait-until #(= (hs.spaces.focusedSpace) space) 3
+                   (fn []
+                     (after 0.4
+                            (fn []
+                              (: (hs.eventtap.event.newMouseEvent types.leftMouseUp
+                                                                  dragged)
+                                 :post)
+                              (hs.mouse.absolutePosition mouse)
+                              (wait-until #(= (space-of win) space) 1.5 k
+                                          #(fail (.. "Couldn't bring " (name-of win)
+                                                     " to this desktop"))))))
+                   (fn []
+                     (: (hs.eventtap.event.newMouseEvent types.leftMouseUp dragged)
+                        :post)
+                     (hs.mouse.absolutePosition mouse)
+                     (fail "Couldn't switch desktops")))))
+   #(fail (.. "Couldn't get to " (name-of win)))))
+
+;; Pairing ==========================================
+;; ==================================================
+
+(fn thumbnail [win screen]
+  "Where WIN's thumbnail is in the right half of SCREEN while macOS offers
+  windows to tile beside another: the hit nearest the middle of its hits."
+  (let [f (screen:fullFrame)
+        hits []]
+    (for [y (+ f.y (/ scan-step 2)) (+ f.y f.h) scan-step]
+      (for [x (+ f.x (/ f.w 2) (/ scan-step 2)) (+ f.x f.w) scan-step]
+        (let [e (hs.axuielement.systemElementAtPosition x y)
+              w (and e (if (= e.AXRole :AXWindow) e e.AXWindow))]
+          (when (same? (and w (w:asHSWindow)) win)
+            (table.insert hits {: x : y})))))
+    (when (< 0 (length hits))
+      (let [cx (/ (accumulate [s 0 _ p (ipairs hits)] (+ s p.x)) (length hits))
+            cy (/ (accumulate [s 0 _ p (ipairs hits)] (+ s p.y)) (length hits))
+            distance #(+ (math.abs (- $.x cx)) (math.abs (- $.y cy)))]
+        (table.sort hits #(< (distance $1) (distance $2)))
+        (. hits 1)))))
+
+(fn paired? [left right]
+  (and (left:isFullScreen) (right:isFullScreen)
+       (= (space-of left) (space-of right))
+       (< (. (left:frame) :x) (. (right:frame) :x))))
+
+(fn click-thumbnail [left right attempts]
+  (var spot nil)
+  (wait-until
+   #(do (set spot (thumbnail right (left:screen))) spot) 4
+   (fn []
+     (let [mouse (hs.mouse.absolutePosition)]
+       (hs.eventtap.leftClick spot)
+       (hs.mouse.absolutePosition mouse))
+     (wait-until #(paired? left right) 3
+                 (fn []
+                   (left:focus)
+                   (minibuffer.message (.. "Paired " (name-of left) " | "
+                                           (name-of right))))
+                 #(if (< 1 attempts)
+                      (click-thumbnail left right (- attempts 1))
+                      (do (hs.eventtap.keyStroke [] :escape 0)
+                          (fail "Couldn't pair them")))))
+   (fn []
+     (hs.eventtap.keyStroke [] :escape 0)
+     (fail (.. "macOS didn't offer " (name-of right))))))
+
+(fn tile [left right]
+  "Tile LEFT to the left in full screen and pick RIGHT for the other side."
+  ;; Focused last but one, it comes first among the thumbnails.
+  (right:focus)
+  (left:focus)
+  (wait-until
+   #(same? (hs.window.focusedWindow) left) 2
+   (fn []
+     (if (not (: (left:application) :selectMenuItem menu-path))
+         (fail (.. (name-of left) " can't be tiled in full screen"))
+         (click-thumbnail left right 2)))
+   #(fail (.. "Couldn't focus " (name-of left)))))
+
+(fn pair-windows [left right]
+  "Put LEFT and RIGHT side by side in Split View, a full-screen Space of their
+  own."
+  (show
+   left
+   #(show
+     right
+     (fn []
+       (let [space (space-of left)]
+         (if (= (space-of right) space)
+             (tile left right)
+             (not= (: (left:screen) :id) (: (right:screen) :id))
+             (fail (.. (name-of right) " is on another screen"))
+             (bring-to-space right space #(tile left right))))))))
+
+(fn candidates [wins]
+  (icollect [_ w (ipairs wins)] (buffers.candidate w)))
+
+(fn pair []
+  "Read two windows, left and right, and pair them in Split View."
+  (let [current (hs.window.focusedWindow)
+        wins (buffers.windows)
+        ;; The focused window first: it's the likeliest to pair.
+        ordered (icollect [_ w (ipairs wins)] (when (not (same? w current)) w))]
+    (when current (table.insert ordered 1 current))
+    (if (< (length ordered) 2)
+        (minibuffer.message "Need two windows to pair")
+        (minibuffer.completing-read
+         "Left window: " (candidates ordered)
+         {:on-accept
+          (fn [a]
+            (when a
+              (minibuffer.completing-read
+               (.. "Right of " a.text ": ")
+               (candidates (icollect [_ w (ipairs ordered)]
+                             (when (not (same? w a.window)) w)))
+               {:on-accept (fn [b]
+                             (when b (pair-windows a.window b.window)))})))}))))
+
+;; The separator ====================================
+;; ==================================================
+
+(fn vertical-overlap? [a b]
+  (and (< a.y (+ b.y b.h)) (< b.y (+ a.y a.h))))
+
+(fn neighbour-pair [win]
+  "WIN and the window sharing its left or right edge, left one first: its
+  Split View partner, or a window tiled beside it."
+  (let [f (win:frame)
+        others (icollect [_ w (ipairs (hs.window.orderedWindows))]
+                 (when (and (not (same? w win)) (w:isStandard) (w:isVisible)
+                            (= (: (w:screen) :id) (: (win:screen) :id))
+                            (vertical-overlap? f (w:frame)))
+                   w))
+        gap #(let [g ($:frame)]
+               (if (< g.x f.x)
+                   (math.abs (- f.x (+ g.x g.w)))
+                   (math.abs (- g.x (+ f.x f.w)))))
+        beside (icollect [_ w (ipairs others)]
+                 (when (<= (gap w) edge-slack) w))]
+    (table.sort beside #(< (gap $1) (gap $2)))
+    (case (. beside 1)
+      other (if (< (. (other:frame) :x) f.x) [other win] [win other]))))
+
+(fn move-separator [direction]
+  (let [win (hs.window.focusedWindow)
+        pair (and win (neighbour-pair win))]
+    (if (not pair)
+        (minibuffer.message "No window beside this one")
+        (let [[left right] pair
+              lf (left:frame)
+              rf (right:frame)
+              dx (* direction (math.floor (* separator-step
+                                             (. (: (left:screen) :frame) :w))))]
+          (if (and (left:isFullScreen) (right:isFullScreen))
+              ;; Split View moves the right one along.
+              (left:setSize {:w (+ lf.w dx) :h lf.h})
+              (do
+                ((. (require :windows) :remember-frames) [left right])
+                (left:setFrame {:x lf.x :y lf.y :w (+ lf.w dx) :h lf.h})
+                (right:setFrame {:x (+ rf.x dx) :y rf.y :w (- rf.w dx) :h rf.h})))
+          (when (= (. (left:frame) :w) lf.w)
+            (minibuffer.message "Can't move the separator further"))))))
+
+(fn move-separator-left [] (move-separator -1))
+(fn move-separator-right [] (move-separator 1))
+
+{: pair
+ : pair-windows
+ : move-separator-left
+ : move-separator-right}

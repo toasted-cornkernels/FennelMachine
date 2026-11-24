@@ -331,11 +331,21 @@ and winner-mode.
 | =f=             | toggle full screen                                      |
 | ===             | balance: tile the screen's windows                      |
 | =v= / =s=       | split side by side / stacked with the last window       |
+| =p=             | pair two windows in Split View (see below)              |
+| =[= / =]=       | move the separator between two windows (repeatable)     |
 | =r= / =R=       | rotate the screen's windows forward / back (repeatable) |
 | =u= / =U=       | undo / redo the last window change (repeatable)         |
 
 Undo remembers the frames of up to 50 changes, across all the commands above and
 restoring a layout; a change that moved several windows undoes in one step.
+
+=p= (=split-view.fnl=) reads the left window, then the right one, from every
+Space, and tiles them in macOS' Split View: a new full-screen Space with the two
+side by side. It leaves full screen first, brings the right window over from
+another desktop, and picks it in the system's chooser. It uses the app's
+=Window › Full Screen Tile= menu item, so apps without it can't be paired. =[= and
+=]= move the separator a 32nd of the screen, in Split View or between two windows
+tiled side by side (the latter undoable).
 
 ** Buffers (=Cmd-SPC b=)
 

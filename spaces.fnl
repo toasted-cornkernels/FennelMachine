@@ -195,6 +195,7 @@ return to the last Space, pick one from a list, add and close desktops"
 
 (local exports
        {: init
+        : goto-space
         : goto-space-number
         : space-left
         : space-right

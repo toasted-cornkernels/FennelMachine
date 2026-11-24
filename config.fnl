@@ -101,6 +101,11 @@
         {:key "=" :title :Balance :action "windows:tile-windows"}
         {:key :v :title "Split with Last" :action "windows:split-side-by-side"}
         {:key :s :title "Stack with Last" :action "windows:split-stacked"}
+        {:key :p :title "Pair in Split View" :action "split-view:pair"}
+        {:key "[" :title "Separator Left" :action "split-view:move-separator-left"
+         :repeatable true}
+        {:key "]" :title "Separator Right" :action "split-view:move-separator-right"
+         :repeatable true}
         {:key :r :title :Rotate :action "windows:rotate-windows-down" :repeatable true}
         {:mods [:shift]
          :key :r

@@ -99,6 +99,7 @@ of the frontmost app, return to the last window"
 
 {: init
  : windows
+ : candidate
  : switch-to-window
  : next-window
  : previous-window
