@@ -106,6 +106,7 @@
          :repeatable true}
         {:key "]" :title "Separator Right" :action "split-view:move-separator-right"
          :repeatable true}
+        {:key :x :title "Swap Split View" :action "split-view:swap"}
         {:key :r :title :Rotate :action "windows:rotate-windows-down" :repeatable true}
         {:mods [:shift]
          :key :r

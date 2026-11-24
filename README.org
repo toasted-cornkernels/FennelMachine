@@ -333,6 +333,7 @@ and winner-mode.
 | =v= / =s=       | split side by side / stacked with the last window       |
 | =p=             | pair two windows in Split View (see below)              |
 | =[= / =]=       | move the separator between two windows (repeatable)     |
+| =x=             | swap the two windows of a Split View                    |
 | =r= / =R=       | rotate the screen's windows forward / back (repeatable) |
 | =u= / =U=       | undo / redo the last window change (repeatable)         |
 
@@ -348,7 +349,8 @@ button's menu. An Emacs frame in its own full screen (the Mac port's
 =toggle-frame-fullscreen=), which has no title bar, is first taken out of it
 through =emacsclient=, so the Emacs server must be running. =[= and
 =]= move the separator a 32nd of the screen, in Split View or between two windows
-tiled side by side (the latter undoable).
+tiled side by side (the latter undoable). =x= drags the left window's title bar
+onto the right one, as macOS has no command to swap them.
 
 ** Buffers (=Cmd-SPC b=)
 

@@ -124,22 +124,32 @@ window shares with a window beside it.
                  " (frame-list))))"
                  " (when (and f (frame-parameter f 'fullscreen))"
                  " (set-frame-parameter f 'fullscreen nil) t))")
-        new #(accumulate [found nil _ w (ipairs (app:allWindows)) &until found]
-               (when (and (= (w:title) title) (green-button w)) w))]
+        pid (app:pid)
+        ;; Every Space's windows, unlike app:allWindows.
+        new #(accumulate [found nil _ w (ipairs (buffers.windows)) &until found]
+               (when (and (= (: (w:application) :pid) pid) (= (w:title) title)
+                          (green-button w))
+                 w))]
+    (var found nil)
     (if (not client)
         (fail "Couldn't find emacsclient")
+        ;; The new window opens in the active Space, so go to the frame's.
         (do
-          (var found nil)
-          (: (hs.task.new client
-                          (fn [code]
-                            (if (= code 0)
-                                (wait-until #(do (set found (new)) found) 3
-                                            #(after 0.3 #(k found))
-                                            #(fail (.. "Couldn't take " title
-                                                       " out of full screen")))
-                                (fail "emacsclient failed; is the server running?")))
-                          ["-e" form])
-             :start)))))
+          (win:focus)
+          (wait-until
+           #(= (hs.spaces.focusedSpace) (space-of win)) 3
+           (fn []
+             (: (hs.task.new client
+                             (fn [code]
+                               (if (= code 0)
+                                   (wait-until #(do (set found (new)) found) 3
+                                               #(after 0.3 #(k found))
+                                               #(fail (.. "Couldn't take " title
+                                                          " out of full screen")))
+                                   (fail "emacsclient failed; is the server running?")))
+                             ["-e" form])
+                :start))
+           #(fail (.. "Couldn't get to " title)))))))
 
 (fn show [win k]
   "Unhide, unminimize and take WIN out of full screen, then call K with it
@@ -397,7 +407,78 @@ window shares with a window beside it.
 (fn move-separator-left [] (move-separator -1))
 (fn move-separator-right [] (move-separator 1))
 
+;; Swapping ==========================================
+;; ==================================================
+
+(local title-bar-roles {:AXGroup true :AXToolbar true :AXStaticText true
+                        :AXWindow true})
+
+(fn title-bar-point [win x]
+  "Where WIN's title bar is at X, or nil until it's revealed: in full screen
+  it slides down under the menu bar, so look below that."
+  (let [top (. (win:frame) :y)
+        first (hs.axuielement.systemElementAtPosition x (+ top 2))]
+    (var found nil)
+    (when (and first (first.AXRole:match "^AXMenuBar"))
+      (for [y (+ top 6) (+ top 120) 4 &until found]
+        (let [e (hs.axuielement.systemElementAtPosition x y)
+              role (and e e.AXRole)]
+          (when (and role (not (role:match "^AXMenu")) (. title-bar-roles role)
+                     (same? (-?> (if (= role :AXWindow) e e.AXWindow)
+                                 (: :asHSWindow))
+                            win))
+            (set found {: x : y})))))
+    found))
+
+(fn drag [from to k]
+  "Drag the mouse with the left button from FROM to TO, then call K."
+  (let [types hs.eventtap.event.types
+        post #(: (hs.eventtap.event.newMouseEvent $1 $2) :post)
+        steps 20]
+    (post types.mouseMoved from)
+    (hs.timer.usleep 200000)
+    (post types.leftMouseDown from)
+    (hs.timer.usleep 300000)
+    (for [i 1 steps]
+      (post types.leftMouseDragged
+            {:x (+ from.x (* (- to.x from.x) (/ i steps)))
+             :y (+ from.y (* (- to.y from.y) (/ i steps)))})
+      (hs.timer.usleep 40000))
+    ;; Let Split View make room before dropping.
+    (after 1 #(do (post types.leftMouseUp to) (k)))))
+
+(fn swap []
+  "Swap the two windows of the focused Split View, the way a user would:
+  drag the left one's title bar onto the right one."
+  (let [win (hs.window.focusedWindow)
+        pair (and win (win:isFullScreen) (neighbour-pair win))]
+    (if (not (and pair (: (. pair 1) :isFullScreen) (: (. pair 2) :isFullScreen)))
+        (minibuffer.message "Not in Split View")
+        (let [[left right] pair
+              mouse (hs.mouse.absolutePosition)
+              lf (left:frame)
+              rf (right:frame)
+              x (+ lf.x (/ lf.w 2))
+              done #(do (hs.mouse.absolutePosition mouse) (win:focus))]
+          (var at nil)
+          ;; Reveal the menu bar and, under it, the title bar.
+          (: (hs.eventtap.event.newMouseEvent hs.eventtap.event.types.mouseMoved
+                                              {: x :y lf.y})
+             :post)
+          (wait-until
+           #(do (set at (title-bar-point left x)) at) 3
+           #(drag at {:x (+ rf.x (/ rf.w 2)) :y (+ at.y 200)}
+                  #(wait-until #(> (. (left:frame) :x) (. (right:frame) :x)) 3
+                               (fn []
+                                 (done)
+                                 (minibuffer.message
+                                  (.. "Swapped " (name-of right) " | "
+                                      (name-of left))))
+                               #(do (done) (fail "Couldn't swap them"))))
+           #(do (done) (fail "Couldn't find the title bar")))))))
+
 {: pair
  : pair-windows
+ : swap
  : move-separator-left
  : move-separator-right}
