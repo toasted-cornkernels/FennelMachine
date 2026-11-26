@@ -310,6 +310,12 @@
         {:key :d :title "Delete Layout" :action "layouts:delete"}
         {:mods [:shift] :key :r :title "Revert Layout" :action "layouts:revert"}])
 
+(local voice-bindings
+       [{:key :v :title :Dictate :action "voice:dictate"}
+        {:key :l :title :Language :action "voice:choose-language"}
+        {:key :x :title :Cancel :action "voice:cancel-dictation"}
+        {:key :e :title "Edit Corrections" :action "voice:edit-corrections"}])
+
 (local menu-items
        [{:key "'" :title :Hammerspoon :action hs.toggleConsole}
         {:key :r :title :Relaunch :action hs.relaunch}
@@ -338,6 +344,7 @@
         {:mods [:shift] :key ";" :title "Eval Fennel" :action "eval:eval-expression"}
         {:mods [:shift] :key :a :title :System :items system-bindings}
         {:mods [:shift] :key :d :title :Layouts :items layout-bindings}
+        {:key :v :title :Voice :items voice-bindings}
         {:key :h :title :Help :items help-bindings}])
 
 (local agnostic-keys [{:mods [:cmd]
@@ -358,7 +365,12 @@
                        :action (activate :Brave)}
                       {:mods [:cmd :ctrl]
                        :key :o
-                       :action "emacs:edit-with-emacs"}])
+                       :action "emacs:edit-with-emacs"}
+                      ;; Same chord as voice-dictate (C-s-l) in Emacs, which
+                      ;; it hands over to there.
+                      {:mods [:cmd :ctrl]
+                       :key :l
+                       :action "voice:dictate"}])
 
 ;; App Specific Config ==============================
 ;; ==================================================
