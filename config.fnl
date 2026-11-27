@@ -313,6 +313,7 @@
 (local voice-bindings
        [{:key :v :title :Dictate :action "voice:dictate"}
         {:key :l :title :Language :action "voice:choose-language"}
+        {:key :c :title "Correct a Word" :action "voice:correct-dictation"}
         {:key :x :title :Cancel :action "voice:cancel-dictation"}
         {:key :e :title "Edit Corrections" :action "voice:edit-corrections"}])
 

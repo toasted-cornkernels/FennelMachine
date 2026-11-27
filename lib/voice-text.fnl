@@ -99,4 +99,107 @@ when a new word starts, so the newlines between them just go."
                    (where (or :hiragana :katakana :han)) :ja))))
   (or found :en))
 
-{: char-class : replace : corrections-for : correct : clean : language-of}
+(fn prompt [words lang]
+  "Whisper's prompt priming it with WORDS. A plain sentence works better than
+a bare list in English."
+  (if (or (not words) (= (length words) 0)) ""
+      (= lang :en) (.. "I use " (table.concat words ", ") ".")
+      (table.concat words ", ")))
+
+(fn utf16-length [s]
+  "S's length in UTF-16 code units, as macOS's text ranges count it."
+  (accumulate [n 0 _ c (utf8.codes s)] (+ n (if (> c 0xffff) 2 1))))
+
+(fn cjk? [c]
+  (or (= (char-class c) :han) (= (char-class c) :hiragana)
+      (= (char-class c) :katakana)
+      ;; CJK punctuation (。、「) and full-width forms
+      (<= 0x3000 c 0x303f) (<= 0xff00 c 0xffef)))
+
+(local no-space-after
+       {9 true 10 true 13 true 32 true 0xa0 true 0x2028 true
+        40 true 91 true 123 true 0x201c true 0x2018 true})
+
+(fn needs-space? [before text]
+  "Whether TEXT should get a space before it when inserted after the character
+BEFORE (a string, or nil at the start of the text), so as not to run into a
+word. Not after spaces or opening brackets, and Japanese and Chinese don't
+separate words with spaces."
+  (let [b (and before (. (or (codepoints before) []) 1))
+        t (. (or (codepoints (or text "")) []) 1)]
+    (not (not (and b t
+                   (not (. no-space-after b))
+                   (not (cjk? b)) (not (cjk? t))
+                   (or (not= nil (char-class t)) (= t 34) (= t 39) (= t 40)))))))
+
+(fn kana-tail? [word]
+  "Whether WORD is only hiragana: a particle, an ending, or okurigana."
+  (let [cs (codepoints word)]
+    (and cs (> (length cs) 0)
+         (accumulate [ok true _ c (ipairs cs)]
+           (and ok (or (<= 0x3041 c 0x309f) (= c 0x30fc)))))))
+
+(local korean-particles
+       ["에서는" "에서도" "으로는" "에게서" "한테서" "까지" "부터" "에서" "에게"
+        "한테" "으로" "처럼" "보다" "에는" "에도" "은" "는" "이" "가" "을" "를"
+        "의" "에" "로" "와" "과" "도" "만"])
+
+(fn fallback-words [text]
+  "TEXT's words split at spaces and punctuation, for when there's no tokenizer."
+  (icollect [w (string.gmatch text "[^%s%p]+")] w))
+
+(fn locate [text words]
+  "WORDS (in order) as {:from :to} byte ranges in TEXT; missing ones are skipped."
+  (var start 1)
+  (icollect [_ w (ipairs words)]
+    (let [(from to) (string.find text w start true)]
+      (when from
+        (set start (+ to 1))
+        {: from : to}))))
+
+(fn word-candidates [text words]
+  "Pieces of TEXT that might have been misheard, in order. WORDS are TEXT's
+words from a tokenizer, or nil to split at spaces and punctuation.
+
+Words, and Korean words without their particle. Japanese has no spaces and the
+tokenizer splits finely, so a word also takes up to two more pieces: kanji or
+katakana continuing it (図書+館), then its hiragana tail (行き+まし+た). A tail
+is never offered alone or cut short."
+  (let [tokens (locate text (or words (fallback-words text)))
+        count (length tokens)
+        word-at #(string.sub text (. tokens $ :from) (. tokens $ :to))
+        glued #(and (> $ 1) (<= $ count)
+                    (= (+ (. tokens (- $ 1) :to) 1) (. tokens $ :from)))
+        seen {}
+        candidates []
+        add #(when (not (. seen $))
+               (tset seen $ true)
+               (table.insert candidates $))]
+    (for [i 1 count]
+      (when (not (and (glued i) (kana-tail? (word-at i))))
+        (var j i)
+        (var in-tail false)
+        (while (and (<= j (math.min count (+ i 2)))
+                    (or (= j i) (glued j)))
+          (let [kana (kana-tail? (word-at j))
+                word (string.sub text (. tokens i :from) (. tokens j :to))
+                cs (codepoints word)
+                particle (and cs (= (char-class (. cs (length cs))) :hangul)
+                              (accumulate [found nil _ p (ipairs korean-particles)
+                                           &until found]
+                                (when (and (> (length word) (length p))
+                                           (= (string.sub word (- (length p))) p))
+                                  p)))]
+            (if (and (> j i) in-tail (not kana))
+                (set j (+ count 1))
+                (do (set in-tail (and (> j i) kana))
+                    (when (not (and in-tail (glued (+ j 1))
+                                    (kana-tail? (word-at (+ j 1)))))
+                      (add word)
+                      (when particle
+                        (add (string.sub word 1 (- (length word) (length particle))))))
+                    (set j (+ j 1))))))))
+    candidates))
+
+{: char-class : replace : corrections-for : correct : clean : language-of : prompt
+ : utf16-length : needs-space? : kana-tail? : word-candidates}

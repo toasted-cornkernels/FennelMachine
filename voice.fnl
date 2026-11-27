@@ -12,6 +12,8 @@ Emacs transcribes its own recordings; the global client here (`dictate', on
 Ctrl-Cmd-L) transcribes and pastes into whatever app is in front, handing
 over to Emacs's voice-dictate when Emacs is. Both go through the same learned
 corrections (`correct', `remember'), kept in ~/.local/share/voice/.
+`correct-dictation' fixes a word of the last global dictation in place (via
+Accessibility; else it copies the fixed text) and remembers the fix.
 
 Text comes in as hs arguments, never spliced into Lua code:
 
@@ -239,13 +241,61 @@ are marked transient so clipboard histories skip them."
                (hs.pasteboard.writeAllData saved))
            (hs.pasteboard.clearContents))))))
 
+(var last nil)
+
+(fn ax [f]
+  "F's result, or nil if the Accessibility call fails, as many apps' do."
+  (let [(ok result) (pcall f)]
+    (when ok result)))
+
+(fn focused-element []
+  (ax #(: (hs.axuielement.systemWideElement) :attributeValue :AXFocusedUIElement)))
+
+(fn text-at [element location len]
+  (when (and element location (>= location 0))
+    (let [s (ax #(element:parameterizedAttributeValue
+                  :AXStringForRange {: location :length len}))]
+      (when (= (type s) :string) s))))
+
 (fn deliver [d text]
   (if (same-place? d)
-      (do (paste text)
-          (say (.. "Voice: " text)))
+      (let [element (focused-element)
+            selection (and element (ax #(element:attributeValue :AXSelectedTextRange)))
+            at (and (= (type selection) :table) selection.location)
+            before (and at (> at 0) (text-at element (- at 1) 1))
+            inserted (if (vt.needs-space? before text) (.. " " text) text)]
+        (paste inserted)
+        ;; Where it went, so `correct-dictation' can fix it in place.
+        (set last {: text :language d.language :app d.app : element
+                   :location (and at (+ at (- (length inserted) (length text))))})
+        (say (.. "Voice: " text "   (⌘SPC v c to fix a word)")))
       ;; Never paste into somewhere the user didn't start dictating.
       (do (hs.pasteboard.setContents text)
           (say (.. "Voice: focus moved, so copied instead: " text)))))
+
+(fn prompt [lang]
+  "Whisper's prompt for LANG, from the configured vocabulary."
+  (vt.prompt (?. (config) :vocabulary lang) lang))
+
+(fn words [text]
+  "TEXT's words from macOS's on-device tokenizer, which knows Japanese, or nil."
+  (let [(ok result)
+        (hs.osascript.javascript
+         (.. "ObjC.import('NaturalLanguage');
+const s = $(" (hs.json.encode [text]) "[0]);
+const t = $.NLTokenizer.alloc.initWithUnit($.NLTokenUnitWord);
+t.string = s;
+const ranges = t.tokensForRange($.NSMakeRange(0, s.length));
+const out = [];
+for (let i = 0; i < ranges.count; i++) {
+  out.push(s.substringWithRange(ranges.objectAtIndex(i).rangeValue).js);
+}
+out;"))]
+    (when (and ok (= (type result) :table)) result)))
+
+(fn candidates [text]
+  "Words of TEXT that might have been misheard, one per line."
+  (table.concat (vt.word-candidates text (words text)) "\n"))
 
 (fn transcribe-file [path lang callback]
   "Transcribe the WAV at PATH as LANG with the local server, then delete it and
@@ -271,7 +321,7 @@ curl task, or nil if it couldn't start."
                "--noproxy" "*" "--max-time" "300"
                "-F" (.. "file=@" path)
                "--form-string" (.. "language=" lang)
-               "--form-string" (.. "prompt=" (table.concat (or words []) ", "))
+               "--form-string" (.. "prompt=" (vt.prompt words lang))
                "-F" "response_format=json"
                cfg.endpoint])]
     (if (task:start)
@@ -365,13 +415,67 @@ In Emacs, voice-dictate does it instead, inserting at point."
                          {:text l :subText (if (= l (language)) "current" "")}))
       (chooser:show))))
 
+(fn fix-in-place [fixed]
+  "Replace the last dictation with FIXED where it was pasted, if it's still
+there and that app is in front; else copy FIXED. Whether it was replaced."
+  (let [{: element : location : text : app} last
+        front (hs.application.frontmostApplication)
+        len (vt.utf16-length text)]
+    (if (and front app (= (front:pid) (app:pid))
+             (= (text-at element location len) text)
+             (ax #(element:setAttributeValue :AXSelectedTextRange
+                                             {: location :length len})))
+        (do (paste fixed)
+            (set last.text fixed)
+            true)
+        (do (hs.pasteboard.setContents fixed)
+            false))))
+
+(fn correct-as [heard meant]
+  (let [fixed (vt.replace last.text heard meant)
+        language (remember last.language heard meant)]
+    (if (language:match "^error:")
+        (say (.. "Voice: " language))
+        (= fixed last.text)
+        (say (.. "Voice: " heard " → " meant ", for " language
+                 " from now on (not in the last dictation)"))
+        (fix-in-place fixed)
+        (say (.. "Voice: " heard " → " meant ", for " language " from now on"))
+        (say (.. "Voice: " heard " → " meant ", for " language
+                 " from now on; couldn't edit it there, so copied the fixed text")))))
+
+(fn correct-dictation []
+  "Fix a misheard word of the last dictation, there and from now on.
+In Emacs, voice-correct does it instead."
+  (let [front (hs.application.frontmostApplication)]
+    (if (not (enabled?)) (say "Voice isn't set up on this machine")
+        (and front (= (front:bundleID) "org.gnu.Emacs"))
+        ((. (require :emacs) :run-command) :voice-correct)
+        (not last) (say "Voice: no dictation to correct")
+        (minibuffer.completing-read
+         "Heard (wrong): "
+         (icollect [_ w (ipairs (vt.word-candidates last.text (words last.text)))]
+           {:text w})
+         {:on-accept
+          (fn [candidate input]
+            (let [heard (if candidate candidate.text input)]
+              (if (= (heard:match "^%s*(.-)%s*$") "")
+                  (say "Voice: nothing to correct")
+                  (do (minibuffer.completing-read
+                       (.. "Meant instead of \"" heard "\": ") []
+                       {:on-accept (fn [_ meant]
+                                     (if (= meant "")
+                                         (say "Voice: give what was meant")
+                                         (correct-as heard meant)))})
+                      (minibuffer.set-input heard)))))}))))
+
 (fn edit-corrections []
   ((. (require :emacs) :run-command) :voice-edit-corrections))
 
 {: start : stop : cancel :ready ready? :recording recording? :enabled enabled?
  : correct : replace : remember : language :set_language set-language : languages
- :transcribe_file transcribe-file
+ :transcribe_file transcribe-file : prompt : candidates
  ;; For Emacs, once the transcript of a recording stopped with keep-hud is in.
  :transcribed #(do (hud.done) "ok")
  : dictate :cancel-dictation cancel-dictation :choose-language choose-language
- :edit-corrections edit-corrections}
+ :edit-corrections edit-corrections :correct-dictation correct-dictation}

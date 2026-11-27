@@ -12,6 +12,41 @@
          (is.eq? (vt.replace "보장치" "장치" "기기") "보장치" "not inside a Korean word")
          (is.eq? (vt.replace "the e max editor" "e max" "Emacs") "the Emacs editor" "several words")))
 
+   (it "primes whisper with a sentence in English"
+       (fn []
+         (is.eq? (vt.prompt ["Emacs" "Nix"] :en) "I use Emacs, Nix." "en")
+         (is.eq? (vt.prompt ["도서관"] :ko) "도서관" "other languages")
+         (is.eq? (vt.prompt nil :en) "" "no vocabulary")
+         (is.eq? (vt.prompt [] :ja) "" "empty vocabulary")))
+
+   (it "offers whole words to correct, Japanese pieces joined"
+       (fn []
+         (is.eq? (table.concat (vt.word-candidates "昨日は、図書館に行きました。"
+                                                   ["昨日" "は" "図書" "館" "に" "行き" "まし" "た"])
+                               "|")
+                 "昨日|昨日は|図書|図書館|図書館に|館|館に|行き|行きました"
+                 "never a particle or a cut-short tail alone")
+         (is.eq? (table.concat (vt.word-candidates "알 수 없는 장치에서는" nil) "|")
+                 "알|수|없는|없|장치에서는|장치"
+                 "Korean words also without their particle")))
+
+   (it "spaces dictation off the word before it"
+       (fn []
+         (is.eq? (vt.needs-space? "d" "Hello") true "after a word")
+         (is.eq? (vt.needs-space? "." "Next") true "after a full stop")
+         (is.eq? (vt.needs-space? " " "Hello") false "after a space")
+         (is.eq? (vt.needs-space? "(" "Hello") false "after a bracket")
+         (is.eq? (vt.needs-space? nil "Hello") false "at the start")
+         (is.eq? (vt.needs-space? "d" ", then") false "before punctuation")
+         (is.eq? (vt.needs-space? "。" "Next") false "after Japanese")
+         (is.eq? (vt.needs-space? "d" "図書館") false "before Japanese")
+         (is.eq? (vt.needs-space? "다" "그리고") true "Korean is spaced")
+         (is.eq? (vt.needs-space? "“" "Hi") false "after an opening quote")))
+
+   (it "counts UTF-16 units like macOS"
+       (fn []
+         (is.eq? (vt.utf16-length "a図😀") 4 "an emoji is two")))
+
    (it "lets Korean particles follow"
        (fn []
          (is.eq? (vt.replace "알 수 없는 장치에서는" "장치" "기기") "알 수 없는 기기에서는" "particle")))
