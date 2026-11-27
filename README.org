@@ -18,8 +18,9 @@ its server; ELispMachine's =init.el= starts it. If it isn't, those keys say
 windows (covered elements are skipped; a partly covered one is labelled and
 clicked on its visible part, which must be at least 8px each way, and a window
 in front also covers the 4px margin around it where a click would resize it;
-rows scrolled under a list's column header count as covered too), notification
-banners and alerts, panels of menu-bar apps such as
+rows scrolled under a list's column header count as covered too; tooltips don't
+cover anything), the Hammerspoon console, notification banners and alerts, the
+widgets in Notification Center, panels of menu-bar apps such as
 the emoji picker (=Cmd-Ctrl-SPC=), the frontmost app's menu bar and any open menu,
 status menu items and a visible Dock. Clickable text such as Calendar events is
 included. Transparent overlay windows, like the full-screen one Notification

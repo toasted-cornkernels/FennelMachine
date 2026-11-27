@@ -240,9 +240,11 @@ M-RET hovers.
                     :w (+ outer.w 2) :h (+ outer.h 2)}
                    frame))))
 
-(fn clickable? [element role subrole in-row?]
+(fn clickable? [element role subrole in-row? _ parent-role]
   (if (. skipped-subroles subrole) false
       (. notification-subroles subrole) true
+      ;; Notification Center's widgets, which open their app when clicked.
+      (and (= parent-role :AXOpaqueProviderGroup) (= role :AXGroup)) true
       ;; Table cells are reachable through their row; free-standing cells
       ;; (e.g. Chromium grids) are not.
       (= role :AXCell) (not in-row?)
@@ -305,7 +307,7 @@ M-RET hovers.
   The pids of apps showing web content are recorded in BUDGET.web-pids, and
   candidates inside it are marked `web?`, the web area they are in."
   (let [pid (and window (: window :pid))]
-    (fn visit [element clip occluders in-row? in-web? thin?]
+    (fn visit [element clip occluders in-row? in-web? thin? parent-role]
       (set budget.visited (+ budget.visited 1))
       (when (and (< budget.visited max-visited) (< (now) budget.deadline))
         (let [role (attr element :AXRole)
@@ -321,7 +323,7 @@ M-RET hovers.
                              (uncovered visible occluders))]
               (when (and (shown-enough? shown frame)
                          ((or pick? clickable?) element role subrole in-row?
-                                                in-web?))
+                                                in-web? parent-role))
                 (table.insert acc {: element : role : subrole :frame shown
                                    : window :web? in-web?})))
             (when (and pid budget.web-pids (= role :AXWebArea))
@@ -341,7 +343,7 @@ M-RET hovers.
                 (each [_ child (ipairs (or (attr element :AXChildren) []))]
                   (visit child clip
                          (if (= child header) occluders under-header)
-                         in-row? in-web? (or thin? pass-through?)))))))))
+                         in-row? in-web? (or thin? pass-through?) role))))))))
     (visit root clip occluders false false false)))
 
 (fn screen-frame [rect]
@@ -361,8 +363,9 @@ M-RET hovers.
   and by the FLOATING panel frames."
   (let [roots []
         occluders (icollect [_ o (ipairs floating)] o)]
-    (each [_ win (ipairs (ordered-windows))]
-      (when (< (length roots) max-windows)
+    (each [_ win (ipairs (ordered-windows true))]
+      ;; A tooltip goes away as soon as the pointer moves to click.
+      (when (and (< (length roots) max-windows) (not= (: win :role) :AXHelpTag))
         (let [frame (: win :frame)
               clip (on-screen-frame frame)]
           (when (and clip (not (any? #(contains? $ clip) occluders)))
