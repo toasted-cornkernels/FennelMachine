@@ -1,6 +1,7 @@
-;; Recording HUD for voice.fnl: what's happening (starting, listening,
-;; transcribing), the language, the time so far, a live microphone level meter
-;; and how to stop. Bottom centre, so it stays clear of the Now Playing HUD.
+;; Recording HUD for voice.fnl: what's happening (starting, listening, ended
+;; at the length limit, transcribing), the language, the time so far, a live
+;; microphone level meter and how to stop. Bottom centre, so it stays clear of
+;; the Now Playing HUD.
 
 (local {: palette : font-name} (require :lib.which-key))
 
@@ -71,6 +72,7 @@ half of listening: macOS withholding it, or a muted input."
                     1)
           [title color] (if (silent?) ["Mic is silent" amber]
                             (= hud.phase :starting) ["Starting…" palette.dim]
+                            (= hud.phase :ended) ["Time limit reached" amber]
                             (= hud.phase :transcribing) ["Transcribing…" palette.prefix]
                             [(.. "Listening · " (or hud.language "")) red])
           elapsed (clock (- (or hud.stopped-at now) hud.started-at))
@@ -130,11 +132,13 @@ to the windows below."
     (set hud.timer (hs.timer.doEvery 0.1 render))))
 
 (fn set-phase [phase]
-  "Move the HUD to PHASE: :listening or :transcribing."
+  "Move the HUD to PHASE: :listening, :ended (the recording stopped by itself)
+or :transcribing."
   (when hud.canvas
     (when (and (= phase :listening) (not= hud.phase :listening))
       (set hud.listening-since (hs.timer.secondsSinceEpoch)))
-    (when (= phase :transcribing)
+    (when (or (= phase :ended)
+              (and (= phase :transcribing) (not= hud.phase :ended)))
       (set hud.stopped-at (hs.timer.secondsSinceEpoch)))
     (set hud.phase phase)
     (render)))

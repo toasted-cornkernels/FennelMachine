@@ -72,7 +72,11 @@ Returns \"ok\" or an error message."
               task (hs.task.new ffmpeg
                                 (fn [code _ stderr]
                                   (when (and (not= code 0) (not= code 255))
-                                    (log.w "ffmpeg exited" code stderr)))
+                                    (log.w "ffmpeg exited" code stderr))
+                                  ;; Ended by itself, at the length limit:
+                                  ;; the audio waits for stop as usual.
+                                  (when (= current rec)
+                                    (hud.set-phase :ended)))
                                 ;; Opening the device takes a moment; ffmpeg's
                                 ;; progress reports tell when audio arrives.
                                 (fn [_ stdout _]
