@@ -1,12 +1,15 @@
-;; Recording HUD for voice.fnl: what's happening (starting, listening, ended
-;; at the length limit, transcribing), the language, the time so far, a live
-;; microphone level meter and how to stop. Bottom centre, so it stays clear of
-;; the Now Playing HUD.
+;; Recording HUD for voice.fnl: what's happening (starting, listening, paused,
+;; ended at the length limit, transcribing), the language, the time so far, a live
+;; microphone level meter and how to stop; for live dictation, the text so far
+;; with the words still being settled dimmed. Bottom centre, so it stays clear
+;; of the Now Playing HUD.
 
 (local {: palette : font-name} (require :lib.which-key))
 
 (local width 420)
-(local height 76)
+(local base-height 76)
+(local live-height 48) ; two lines of live text
+(local live-units 96) ; how much of the live text fits: a CJK character is 2
 (local bottom-margin 120)
 (local pad 14)
 (local bar-count 28)
@@ -20,6 +23,8 @@
 (local amber "#e0af68")
 
 (local hud {})
+
+(local resume-phrases {:en "“resume dictation”" :ko "“받아쓰기 계속”" :ja "「音声入力再開」"})
 
 (fn text [str size color alignment]
   (hs.styledtext.new (or str "")
@@ -41,13 +46,13 @@ half of listening: macOS withholding it, or a muted input."
 
 (fn meter []
   (let [x0 (- width pad meter-w)
-        mid (/ height 2)
+        mid (/ base-height 2)
         n (length hud.levels)
         bars []]
     (for [i 1 bar-count]
       (let [db (or (. hud.levels (+ (- n bar-count) i)) floor-db)
             fraction (math.max 0.06 (math.min 1 (/ (- db floor-db) (- floor-db))))
-            h (* fraction (- height (* 2 pad) 8))]
+            h (* fraction (- base-height (* 2 pad) 8))]
         (table.insert
          bars
          {:type :rectangle :action :fill
@@ -56,6 +61,32 @@ half of listening: macOS withholding it, or a muted input."
           :frame {:x (+ x0 (* (- i 1) (+ bar-w bar-gap))) :y (- mid (/ h 2))
                   :w bar-w :h h}})))
     bars))
+
+(fn live-tail [committed preview]
+  "The end of the live text, as much as fits: COMMITTED, then PREVIEW dimmed."
+  (let [chars []]
+    (each [_ part (ipairs [[committed palette.fg] [preview palette.dim]])]
+      (let [[str color] part]
+        (each [_ c (utf8.codes (: (or str "") :gsub "\n+" " ↵ "))]
+          (table.insert chars [c color]))))
+    (var units 0)
+    (var from (+ (length chars) 1))
+    (while (and (> from 1) (< units live-units))
+      (set from (- from 1))
+      (set units (+ units (if (>= (. chars from 1) 0x1100) 2 1))))
+    (var out (text (if (> from 1) "…" "") 14 palette.dim))
+    (var i from)
+    (while (<= i (length chars))
+      (let [color (. chars i 2)
+            run []]
+        (while (and (<= i (length chars)) (= (. chars i 2) color))
+          (table.insert run (utf8.char (. chars i 1)))
+          (set i (+ i 1)))
+        (set out (.. out (hs.styledtext.new (table.concat run)
+                                            {:font {:name font-name :size 14}
+                                             :color {:hex color}
+                                             :paragraphStyle {:lineBreak :wordWrap}})))))
+    out))
 
 (var hide nil)
 
@@ -73,6 +104,7 @@ half of listening: macOS withholding it, or a muted input."
           [title color] (if (silent?) ["Mic is silent" amber]
                             (= hud.phase :starting) ["Starting…" palette.dim]
                             (= hud.phase :ended) ["Time limit reached" amber]
+                            (= hud.phase :paused) ["Paused" amber]
                             (= hud.phase :transcribing) ["Transcribing…" palette.prefix]
                             [(.. "Listening · " (or hud.language "")) red])
           elapsed (clock (- (or hud.stopped-at now) hud.started-at))
@@ -91,9 +123,22 @@ half of listening: macOS withholding it, or a muted input."
                     {:type :text
                      :text (text (if (= hud.phase :transcribing)
                                      (or hud.cancel-hint "")
+                                     (= hud.phase :paused)
+                                     (.. "say " (or (. resume-phrases hud.language)
+                                                    (. resume-phrases :en))
+                                         " to go on")
                                      hud.hint)
                                  13 palette.dim)
                      :frame {:x (+ pad 20) :y (+ pad 28) :w text-w :h 20}}]]
+      (when hud.live?
+        (table.insert elements
+                      {:type :text
+                       :text (if (and (= (or hud.live-text "") "")
+                                      (= (or hud.live-preview "") ""))
+                                 (text "…" 14 palette.dim)
+                                 (live-tail hud.live-text hud.live-preview))
+                       :frame {:x pad :y (- base-height 6) :w (- width (* 2 pad))
+                               :h (- live-height 4)}}))
       (each [_ bar (ipairs (meter))]
         (table.insert elements bar))
       (hud.canvas:replaceElements elements))))
@@ -105,13 +150,17 @@ half of listening: macOS withholding it, or a muted input."
   (set hud.timer nil)
   (set hud.canvas nil)))
 
-(fn show [{: language : hint : cancel-hint}]
+(fn show [{: language : hint : cancel-hint : live}]
   "Show the HUD for a recording that's starting, in LANGUAGE. HINT says how to
-stop; CANCEL-HINT, if any, how to cancel while transcribing. Clicks go through
-to the windows below."
+stop; CANCEL-HINT, if any, how to cancel while transcribing; LIVE, whether to
+make room for the text as it's said. Clicks go through to the windows below."
   (hide)
   (let [frame (: (hs.screen.mainScreen) :frame)
-        now (hs.timer.secondsSinceEpoch)]
+        now (hs.timer.secondsSinceEpoch)
+        height (if live (+ base-height live-height) base-height)]
+    (set hud.live? live)
+    (set hud.live-text "")
+    (set hud.live-preview "")
     (set hud.phase :starting)
     (set hud.language language)
     (set hud.hint (or hint ""))
@@ -132,8 +181,8 @@ to the windows below."
     (set hud.timer (hs.timer.doEvery 0.1 render))))
 
 (fn set-phase [phase]
-  "Move the HUD to PHASE: :listening, :ended (the recording stopped by itself)
-or :transcribing."
+  "Move the HUD to PHASE: :listening, :paused (by a spoken \"pause
+dictation\"), :ended (the recording stopped by itself) or :transcribing."
   (when hud.canvas
     (when (and (= phase :listening) (not= hud.phase :listening))
       (set hud.listening-since (hs.timer.secondsSinceEpoch)))
@@ -148,6 +197,12 @@ or :transcribing."
   (when (= hud.phase :transcribing)
     (hide)))
 
+(fn live [committed preview]
+  "Show the live text: COMMITTED, then PREVIEW, the words not settled yet."
+  (when hud.canvas
+    (set hud.live-text committed)
+    (set hud.live-preview preview)))
+
 (fn level [db]
   "Add a microphone level reading, in dBFS (-math.huge for silence)."
   (when hud.canvas
@@ -156,4 +211,4 @@ or :transcribing."
     (when (> (length hud.levels) bar-count)
       (table.remove hud.levels 1))))
 
-{: show : hide : done : set-phase : level}
+{: show : hide : done : set-phase : level : live}

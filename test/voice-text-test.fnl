@@ -112,4 +112,75 @@
            (is.eq? stopped true "en stopped"))
          (is.eq? (vt.markers "회의는 내일이야 마침표 받아쓰기 중지 이건 무시") "회의는 내일이야." "ko")
          (is.eq? (vt.markers "会議は明日です。9点音声入力終了。これは無視。") "会議は明日です。" "ja")
-         (is.eq? (select 2 (vt.markers "No markers here.")) false "not stopped")))))
+         (is.eq? (select 2 (vt.markers "No markers here.")) false "not stopped")))
+
+   (it "drops spoken controls and tells them apart"
+       (fn []
+         (is.eq? (vt.markers "Hello there. Pause dictation.") "Hello there." "pause dropped")
+         (is.eq? (vt.markers "Hello there. Resume dictation. And more.") "Hello there. And more." "resume dropped")
+         (is.eq? (vt.voice-control "So that's it. Stop dictation.") :stop "en stop")
+         (is.eq? (vt.voice-control "pause dictation") :pause "en pause")
+         (is.eq? (vt.voice-control "Resume dictation!") :resume "en resume")
+         (is.eq? (vt.voice-control "받아쓰기 중지") :stop "ko stop")
+         (is.eq? (vt.voice-control "받아쓰기 일시 중지") :pause "ko pause")
+         (is.eq? (vt.voice-control "받아쓰기 계속") :resume "ko resume")
+         (is.eq? (vt.voice-control "音声入力終了") :stop "ja stop")
+         (is.eq? (vt.voice-control "音声入力一時停止。") :pause "ja pause")
+         (is.eq? (vt.voice-control "音声入力再開") :resume "ja resume")
+         (is.eq? (vt.voice-control "Stop dictation is a phrase I like.") nil "not at the end")
+         (is.eq? (vt.voice-control "We talked about the weather.") nil "no control")))
+
+   (it "scratches the sentence before scratch that"
+       (fn []
+         (is.eq? (vt.markers "First idea. Second idea. Scratch that. Third idea.") "First idea. Third idea." "en")
+         (let [(text _ previous) (vt.markers "Scratch that.")]
+           (is.eq? text "" "alone: nothing left")
+           (is.eq? previous true "alone: the previous dictation"))
+         (is.eq? (select 3 (vt.markers "One. Two. Scratch that.")) false "not the previous")
+         (is.eq? (vt.markers "Don't scratch that surface.") "Don't scratch that surface." "as words")
+         (is.eq? (vt.markers "You can't scratch that, it's glass.") "You can't scratch that, it's glass." "as words, with a comma")
+         (is.eq? (vt.markers "I like apples scratch that I like oranges.") "I like oranges." "unpunctuated")
+         (is.eq? (vt.markers "첫째 마침표 둘째 마침표 방금 거 지워 셋째 마침표") "첫째. 셋째." "ko")
+         (is.eq? (vt.markers "一つ目。二つ目。今のなし。三つ目。") "一つ目。三つ目。" "ja")))
+
+   (it "writes quotes and brackets"
+       (fn []
+         (is.eq? (vt.markers "He said open quote hello close quote and left.") "He said \"hello\" and left." "en quotes")
+         (is.eq? (vt.markers "Call it open paren later close paren today.") "Call it (later) today." "en parens")
+         (is.eq? (vt.markers "그가 따옴표 열고 안녕 따옴표 닫고 라고 했어") "그가 \"안녕\" 라고 했어" "ko")
+         (is.eq? (vt.markers "彼はかぎかっここんにちはかぎかっこ閉じと言った。") "彼は「こんにちは」と言った。" "ja")))
+
+   (it "writes markers literally in Korean and Japanese"
+       (fn []
+         (is.eq? (vt.markers "문자 그대로 쉼표 라는 단어") "쉼표 라는 단어" "ko")
+         (is.eq? (vt.markers "文字通り読点、それだけ。") "読点、それだけ。" "ja")
+         (is.eq? (vt.markers "文字通り読点という言葉") "文字通り読点という言葉" "ja, a word anyway")))
+
+   (it "takes back a word at backspace"
+       (fn []
+         (is.eq? (vt.markers "I fixed the typo, backspace bug in the parser.") "I fixed the bug in the parser." "en word and its comma")
+         (is.eq? (vt.markers "Nice question mark backspace exclamation mark") "Nice!" "a spoken mark")
+         (is.eq? (vt.markers "Hello world new line backspace again.") "Hello world again." "a new line")
+         (is.eq? (vt.markers "This is wrong backspace backspace right.") "This right." "twice")
+         (is.eq? (vt.markers "Backspace.") "" "nothing before")
+         (is.eq? (vt.markers "Press backspace to delete it.") "Press backspace to delete it." "as a word")
+         (is.eq? (vt.markers "Hit the backspace key.") "Hit the backspace key." "the key")
+         (is.eq? (vt.markers "자료는 미리 공유 백스페이스 보내 주세요.") "자료는 미리 보내 주세요." "ko")
+         (is.eq? (vt.markers "백스페이스 키를 눌러") "백스페이스 키를 눌러" "ko key")
+         (is.eq? (vt.markers "資料は事前にバックスペース共有してください。") "資料は共有してください。" "ja, kanji with its kana")
+         (is.eq? (vt.markers "資料は、事前にバック・フェース共有してください。") "資料は、共有してください。" "ja as the listener hears it")
+         (is.eq? (vt.markers "バックスペースキーを押して") "バックスペースキーを押して" "ja key")))
+
+   (it "lowercases after a marker that swallowed whisper's period"
+       (fn []
+         (is.eq? (vt.markers "I fixed the typo backspace. Bug fixed.") "I fixed the bug fixed." "en")))
+
+   (it "holds back what could still become a marker"
+       (fn []
+         (is.eq? (vt.pending-marker "Thanks question") 8 "en, a word")
+         (is.eq? (vt.pending-marker "Hello world, back") 14 "en, a prefix of a word")
+         (is.eq? (vt.pending-marker "Is it done? Question") 13 "after whisper's punctuation")
+         (is.eq? (vt.pending-marker "Thanks") nil "nothing")
+         (is.eq? (vt.pending-marker "Done. Question mark") nil "a whole marker")
+         (is.eq? (vt.pending-marker "질문 물음") 8 "ko")
+         (is.eq? (vt.pending-marker "終わり疑問") 10 "ja")))))
