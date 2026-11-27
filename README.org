@@ -204,6 +204,10 @@ config) and the hints' messages show there for a few seconds, and are printed to
 the Hammerspoon console, which plays the part of =*Messages*=. While the
 minibuffer is active, a message appears after the input as =[message]=.
 
+=Cmd-SPC r l= reopens the last minibuffer session (search, launcher, switcher,
+…) with its input and selection, like =vertico-repeat=; =y or n= questions are
+left out.
+
 ** Keyboard Shortcuts commands (=Cmd-SPC k=)
 
 =Cmd-SPC k= reads any command of System Settings › Keyboard › Keyboard Shortcuts in
@@ -237,8 +241,11 @@ are the apps (=/Applications=, =/System/Applications=, =~/Applications= and thei
 subfolders such as Nix Apps), the panes of System Settings, system commands (lock,
 sleep, restart, shut down, log out, empty or open the Trash, eject, dark mode, keep
 awake, media and volume controls, opening mpv, clipboard history, converting a time
-between time zones), every Keyboard Shortcuts command, and
-=Quit=, =Hide= and =Force Quit= for each running app. The ones you pick most often
+between time zones), Hammerspoon itself (reload, relaunch, quit, its console), the
+leader's commands below (switching apps and windows, file, bookmark, macro, shell
+and window-picking commands, menu search, link hints, repeating the minibuffer),
+every Keyboard Shortcuts command, and =Quit=, =Hide=, =Force Quit= and =Relaunch=
+for each running app. The ones you pick most often
 move to the top. Depending on what you type, it also offers:
 
 | Input                           | Candidate                                          |
@@ -339,6 +346,14 @@ and winner-mode.
 | =x=             | swap the two windows of a Split View                    |
 | =r= / =R=       | rotate the screen's windows forward / back (repeatable) |
 | =u= / =U=       | undo / redo the last window change (repeatable)         |
+| =a=             | ace-window: focus the window whose label you type       |
+| =D=             | ace-delete-window: close the labelled window            |
+| =S=             | ace-swap-window: trade places with the labelled window  |
+
+=a=, =D= and =S= (=ace-window.fnl=) draw a label (=a=, =s=, =d=, …) on every
+visible window; type one, or =ESC= to cancel. =Cmd-SPC 1= … =Cmd-SPC 9= focus the
+Nth visible window, numbered like winum: by screen from left to right, then by
+left edge, then top. =Cmd-SPC j w= is =a= too.
 
 Undo remembers the frames of up to 50 changes, across all the commands above and
 restoring a layout; a change that moved several windows undoes in one step.
@@ -357,18 +372,112 @@ onto the right one, as macOS has no command to swap them.
 
 ** Buffers (=Cmd-SPC b=)
 
-=buffers.fnl= treats windows as buffers.
+=buffers.fnl= treats apps as buffers and their windows as the buffer's windows:
+killing the buffer quits the app, reverting it relaunches the app.
 
-| Key           | Action                                                   |
-|---------------+----------------------------------------------------------|
-| =b b=         | switch to any window by name, most recently used first   |
-| =b n= / =b p= | next / previous window of the frontmost app (repeatable) |
-| =b TAB=       | the last window                                          |
-| =b d=         | close the window                                         |
+| Key                   | Action                                                             |
+|-----------------------+--------------------------------------------------------------------|
+| =b b=, =r b=          | switch to an app, most recently used first                         |
+| =b w=                 | switch to any window by name, most recently used first             |
+| =b B=                 | list the apps, ibuffer-style (below)                               |
+| =TAB= (=Cmd-SPC TAB=) | the last app                                                       |
+| =b n= / =b p=         | next / previous window of the frontmost app (repeatable)           |
+| =b TAB=               | the last window                                                    |
+| =b c=                 | a new window of the frontmost app (=Cmd-N=)                        |
+| =b -=                 | hide the frontmost app (=Cmd-H=), like =bury-buffer=               |
+| =b d=                 | quit the frontmost app, as =Cmd-Q= does (it may still ask to save) |
+| =b D=                 | force quit it; unsaved changes are lost                            |
+| =b R=                 | relaunch it (Hammerspoon itself relaunches)                        |
 
-The switcher lists windows on every Space, minimized and hidden ones included (it
-unminimizes or unhides them), annotated with the app. =s-w= closes the selected
-window and reopens the switcher.
+=b d=, =b D= and =b R= ask =y or n= first. =Cmd-SPC w d= closes just the window.
+The app switcher lists apps with a Dock icon, annotated with their window count,
+whether they are hidden and their main window's title; switching unhides the app
+and unminimizes a window when none is visible. =s-q= quits the selected app and
+reopens the list. The window switcher lists windows on every Space, minimized and
+hidden ones included (it unminimizes or unhides them), annotated with the app.
+=s-w= closes the selected window and reopens the switcher.
+
+In the app list (=b B=), =s-m= marks or unmarks the selected app (shown as =*=),
+=s-u= unmarks all, and =s-d= quits, =s-D= force quits and =s-h= hides the marked
+apps, or the selected one when none is marked; the list then comes back. =RET=
+switches to the app.
+
+** Files and bookmarks (=Cmd-SPC f=)
+
+=files.fnl= treats the file behind the focused window as the buffer's visited
+file: a document window's =AXDocument= (TextEdit, Preview, Pages, Xcode, Emacs,
+…), or in Finder the selected item, else the front window's folder.
+
+| Key              | Action                                                                 |
+|------------------+------------------------------------------------------------------------|
+| =f f=            | find a file with Spotlight (the launcher, started with ='=)            |
+| =f r=, =r f=     | a recently opened file, most recent first (Spotlight's last-used date) |
+| =f j=            | reveal the file in Finder, like =dired-jump=                           |
+| =f y=            | copy its path                                                          |
+| =f c=            | copy it to a new name or path                                          |
+| =f R=            | rename or move it; the app follows the file                            |
+| =f D D=          | move it to the Trash (asks first)                                      |
+| =f s= / =f a=    | save (=Cmd-S=) / save as (=Cmd-Shift-S=)                               |
+| =f e d=          | open this config's =config.fnl= in Emacs                               |
+| =f e R=          | reload the config                                                      |
+| =f b m=          | bookmark what the focused window shows                                 |
+| =f b b=, =f b j= | jump to a bookmark (=s-d= deletes the selected one)                    |
+| =f b d=          | delete a bookmark                                                      |
+
+=f c= and =f R= read the new name prefilled with the old one: a bare name stays
+in the same folder, a path (=~= expanded) moves it; an existing file is never
+overwritten. Recent files and found files take the launcher's keys (=s-RET=,
+=M-w=, =s-y=, =s-e=, =C-.=).
+
+A bookmark (=bookmarks.fnl=, like =bookmark.el=) keeps the page's URL in a
+browser (Safari via =AXDocument=; Chrome, Brave, Edge, Vivaldi and Arc via
+AppleScript), else the document's file, else the app and the window's title.
+Jumping opens the URL or file in the same app (in Finder, reveals the file or
+opens the folder), or brings the app forward and focuses the window with that
+title. Setting a bookmark asks for a name (the window's title by default); one
+of the same name is replaced. Bookmarks are kept in =hs.settings=.
+
+** Search and jump (=Cmd-SPC s=, =Cmd-SPC j=)
+
+| Key   | Action                                                                   |
+|-------+--------------------------------------------------------------------------|
+| =s j= | pick one of the frontmost app's menu items by name, like =consult-imenu= |
+| =s e= | the element search (=Ctrl-Alt-SPC=)                                      |
+| =j j= | keyboard hints (=Cmd-Shift-SPC=)                                         |
+| =j l= | hints on links only, like =ace-link=                                     |
+| =j w= | pick a window by its label (=Cmd-SPC w a=)                               |
+
+=s j= lists every enabled menu item, closed menus included (=File › Save As…=,
+annotated with its shortcut), the app's menus before the Apple menu.
+
+** Keyboard macros (=Cmd-SPC K=)
+
+=kmacro.fnl= records keys and plays them back, like Emacs' =kmacro=.
+
+| Key   | Action                                       |
+|-------+----------------------------------------------|
+| =K (= | start recording                              |
+| =K )= | stop recording                               |
+| =K k= | start or stop                                |
+| =K e= | play the last macro                          |
+| =K n= | name the last macro, to keep it              |
+| =K r= | play a named macro (it becomes the last one) |
+| =K d= | delete a named macro                         |
+
+While recording, the menu bar shows =● Macro=. Recording stops from the leader
+menu, so the keys from the last leader chord on (=Cmd-SPC K )= itself) are left
+out. A macro can use the leader in the middle: replayed keys trigger hotkeys like
+typed ones. Only key presses are recorded (with their modifiers), not mouse
+clicks. The last macro and the named ones are kept in =hs.settings=.
+
+** Shell command (=Cmd-SPC !=)
+
+=shell.fnl= reads a command in the minibuffer and runs it with your login shell in
+the home folder, like =async-shell-command=. Up to three short lines of output
+show in the echo area, longer output in the help viewer, with the exit code when
+it isn't 0. Earlier commands (the last 100, kept in =hs.settings=) are offered
+below what you type; =RET= on the first candidate runs the input as typed. To run
+a command in a terminal window instead, type =$ command= in the launcher.
 
 ** Spaces (=Cmd-SPC t=, =Cmd-SPC [= / =]=)
 
@@ -408,16 +517,20 @@ are skipped, not launched, and the echo area counts the windows that weren't ope
 A layout saved on a screen that is gone is scaled onto the main screen. Layouts are
 kept in =hs.settings=; =Cmd-SPC w u= undoes a restore.
 
-** Quit (=Cmd-SPC q=)
+** Hammerspoon (=Cmd-SPC q=)
 
-| Key   | Action                                                             |
-|-------+--------------------------------------------------------------------|
-| =q q= | quit the frontmost app, as =Cmd-Q= does (it may still ask to save) |
-| =q Q= | force quit it; unsaved changes are lost                            |
-| =q r= | relaunch it (Hammerspoon itself reloads)                           |
-| =q f= | close the window                                                   |
+=quit.fnl= is about Hammerspoon itself, as Emacs' =SPC q= is about Emacs.
 
-Each asks =y or n= first (=quit.fnl=).
+| Key   | Action                                                          |
+|-------+-----------------------------------------------------------------|
+| =q r= | reload the config (clears the console first)                    |
+| =q R= | relaunch Hammerspoon                                            |
+| =q q= | quit Hammerspoon (asks first; its keys are gone until reopened) |
+| =q c= | clear the console                                               |
+
+Quitting, force quitting and relaunching apps moved to =Cmd-SPC b= (above), and
+=Cmd-SPC r= is now the resume/recent menu: =r l= repeats the last minibuffer
+session, =r b= switches apps and =r f= opens a recent file.
 
 ** Embark (=Cmd-SPC e e=)
 
@@ -625,7 +738,8 @@ Privacy & Security › Files and Folders).
 
 =notifications.fnl= drives Notification Center through its accessibility tree. The
 /current/ notification is the one peeking in at the top right: the topmost banner,
-else the topmost alert (alerts stay until dismissed).
+else the topmost alert (alerts stay until dismissed). Several notifications from one
+app are grouped into a stack, which counts as one notification.
 
 | Key | Action                                                                     |
 |-----+----------------------------------------------------------------------------|
@@ -639,7 +753,8 @@ notification is on screen, or when Notification Center is open. Notifications ha
 accessibility action to swipe them away and macOS ignores synthetic trackpad swipes,
 so =b= drags the notification off to the right with synthetic mouse events and puts
 the pointer back; the pointer visibly jumps for a fraction of a second. =x= uses the
-notification's own =Close= action. =c= opens Notification Center if needed, picks
+notification's own =Close= action, or a stack's =Clear All= (stacks have no =Close=),
+which clears the whole stack. =c= opens Notification Center if needed, picks
 =Clear All Notifications= from its =Clear Notifications…= menu, and closes it again.
 
 ** Radio (=Cmd-SPC a R=)

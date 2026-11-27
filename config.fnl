@@ -97,6 +97,9 @@
          :action "windows:center-enlarge-with-rate-repeatedly"}
         {:key :g :title :Grid :action "windows:show-grid"}
         {:key :d :title :Close :action "windows:close-window"}
+        {:mods [:shift] :key :d :title "Ace Delete" :action "ace-window:delete-window"}
+        {:mods [:shift] :key :s :title "Ace Swap" :action "ace-window:swap-window"}
+        {:key :a :title "Ace Window" :action "ace-window:select-window"}
         {:key :f :title "Full Screen" :action "windows:toggle-fullscreen"}
         {:key "=" :title :Balance :action "windows:tile-windows"}
         {:key :v :title "Split with Last" :action "windows:split-side-by-side"}
@@ -254,18 +257,77 @@
          :title "Toggle Recording"
          :action "clipboard:toggle-pause"}])
 
+;; Apps are buffers and their windows the buffer's windows: killing the
+;; buffer quits the app, reverting it relaunches the app.
 (local buffer-bindings
-       [{:key :b :title "Switch Window" :action "buffers:switch-to-window"}
-        {:key :d :title "Close Window" :action "windows:close-window"}
+       [{:key :b :title "Switch App" :action "buffers:switch-to-app"}
+        {:key :w :title "Switch Window" :action "buffers:switch-to-window"}
+        {:mods [:shift] :key :b :title "List Apps" :action "buffers:list-apps"}
+        {:key :d :title "Quit App" :action "buffers:quit-app"}
+        {:mods [:shift] :key :d :title "Force Quit App" :action "buffers:force-quit-app"}
+        {:mods [:shift] :key :r :title "Relaunch App" :action "buffers:relaunch-app"}
+        {:key "-" :title "Hide App" :action "buffers:bury-app"}
+        {:key :c :title "New Window" :action "buffers:new-window"}
         {:key :n :title "Next App Window" :action "buffers:next-window" :repeatable true}
         {:key :p :title "Previous App Window" :action "buffers:previous-window" :repeatable true}
         {:key :tab :title "Last Window" :action "buffers:last-window"}])
 
+;; The file behind the focused window as the visited file (files.fnl), and
+;; bookmarks of what windows show (bookmarks.fnl).
+(local bookmark-bindings
+       [{:key :m :title "Set Bookmark" :action "bookmarks:bookmark-set"}
+        {:key :b :title "Jump to Bookmark" :action "bookmarks:bookmark-jump"}
+        {:key :j :title "Jump to Bookmark" :action "bookmarks:bookmark-jump"}
+        {:key :d :title "Delete Bookmark" :action "bookmarks:bookmark-delete"}])
+
+(local file-bindings
+       [{:key :f :title "Find File" :action "files:find-file"}
+        {:key :r :title "Recent Files" :action "files:recent-files"}
+        {:key :j :title "Reveal in Finder" :action "files:reveal"}
+        {:key :y :title "Copy Path" :action "files:copy-path"}
+        {:key :c :title "Copy File" :action "files:duplicate"}
+        {:mods [:shift] :key :r :title "Rename File" :action "files:rename"}
+        {:mods [:shift] :key :d
+         :title :Delete
+         :items [{:mods [:shift] :key :d :title "Trash File" :action "files:trash"}]}
+        {:key :s :title "Save" :action "files:save"}
+        {:key :a :title "Save As" :action "files:save-as"}
+        {:key :b :title :Bookmarks :items bookmark-bindings}
+        {:key :e
+         :title :Hammerspoon
+         :items [{:key :d :title "Visit Config" :action "files:visit-config"}
+                 {:mods [:shift] :key :r :title "Reload Config" :action "quit:reload"}]}])
+
+(local search-bindings
+       [{:key :j :title "Menu Items" :action "hints:menu-search"}
+        {:key :e :title "Search Elements" :action "hints:search"}])
+
+(local jump-bindings
+       [{:key :j :title "Link Hints" :action "hints:show-hints"}
+        {:key :l :title "Links" :action "hints:show-link-hints"}
+        {:key :w :title "Window" :action "ace-window:select-window"}])
+
+(local repeat-bindings
+       [{:key :l :title "Repeat Minibuffer" :action "lib.minibuffer:repeat"}
+        {:key :b :title "Switch App" :action "buffers:switch-to-app"}
+        {:key :f :title "Recent Files" :action "files:recent-files"}])
+
+;; Keyboard macros (kmacro.fnl), on Emacs' C-x ( ) e.
+(local kmacro-bindings
+       [{:mods [:shift] :key :9 :title "Start Recording" :action "kmacro:start"}
+        {:mods [:shift] :key :0 :title "Stop Recording" :action "kmacro:stop"}
+        {:key :k :title "Start/Stop" :action "kmacro:toggle"}
+        {:key :e :title "Call Last Macro" :action "kmacro:call-last"}
+        {:key :n :title "Name Last Macro" :action "kmacro:name-last"}
+        {:key :r :title "Run Named Macro" :action "kmacro:run-named"}
+        {:key :d :title "Delete Named Macro" :action "kmacro:delete-named"}])
+
+;; Hammerspoon itself, as Emacs' SPC q.
 (local quit-bindings
-       [{:key :q :title "Quit App" :action "quit:quit-app"}
-        {:mods [:shift] :key :q :title "Force Quit App" :action "quit:force-quit-app"}
-        {:key :r :title "Relaunch App" :action "quit:relaunch-app"}
-        {:key :f :title "Close Window" :action "windows:close-window"}])
+       [{:key :r :title "Reload Hammerspoon" :action "quit:reload"}
+        {:mods [:shift] :key :r :title "Relaunch Hammerspoon" :action "quit:relaunch"}
+        {:key :q :title "Quit Hammerspoon" :action "quit:quit"}
+        {:key :c :title "Clear Console" :action "quit:clear-console"}])
 
 (local embark-bindings
        [{:key :e :title "Act on Selection" :action "embark:act"}])
@@ -319,8 +381,14 @@
 
 (local menu-items
        [{:key "'" :title :Hammerspoon :action hs.toggleConsole}
-        {:key :r :title :Relaunch :action hs.relaunch}
         {:key :space :title :Run :action "launcher:show"}
+        {:key :tab :title "Last App" :action "buffers:last-app"}
+        {:mods [:shift] :key :1 :title "Shell Command" :action "shell:shell-command"}
+        {:key :f :title :Files :items file-bindings}
+        {:key :s :title :Search :items search-bindings}
+        {:key :j :title :Jump :items jump-bindings}
+        {:key :r :title "Resume/Recent" :items repeat-bindings}
+        {:mods [:shift] :key :k :title "Keyboard Macros" :items kmacro-bindings}
         {:key :y :title :Clipboard :items clipboard-bindings}
         {:key :w
          :title :Window
@@ -337,7 +405,7 @@
          :title "Keyboard Shortcuts"
          :action "system-shortcuts:execute"}
         {:key :e :title :Embark :items embark-bindings}
-        {:key :q :title :Quit :items quit-bindings}
+        {:key :q :title :Hammerspoon :items quit-bindings}
         {:mods [:shift] :key :t :title :Toggles :items toggle-bindings}
         {:key :t :title :Spaces :items space-bindings}
         {:key "[" :title "Space Left" :action "spaces:space-left" :repeatable true}
@@ -346,7 +414,16 @@
         {:mods [:shift] :key :a :title :System :items system-bindings}
         {:mods [:shift] :key :d :title :Layouts :items layout-bindings}
         {:key :v :title :Voice :items voice-bindings}
-        {:key :h :title :Help :items help-bindings}])
+        {:key :h :title :Help :items help-bindings}
+        {:key :1 :title "Window 1" :action "ace-window:select-window-1"}
+        {:key :2 :title "Window 2" :action "ace-window:select-window-2"}
+        {:key :3 :title "Window 3" :action "ace-window:select-window-3"}
+        {:key :4 :title "Window 4" :action "ace-window:select-window-4"}
+        {:key :5 :title "Window 5" :action "ace-window:select-window-5"}
+        {:key :6 :title "Window 6" :action "ace-window:select-window-6"}
+        {:key :7 :title "Window 7" :action "ace-window:select-window-7"}
+        {:key :8 :title "Window 8" :action "ace-window:select-window-8"}
+        {:key :9 :title "Window 9" :action "ace-window:select-window-9"}])
 
 (local agnostic-keys [{:mods [:cmd]
                        :key :space

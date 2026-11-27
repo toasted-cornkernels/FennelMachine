@@ -30,6 +30,9 @@ in any order, anywhere in a candidate.
 (var canvas nil)
 (var echo-timer nil)
 (var session nil)
+;; The last completing-read, for `repeat`: its prompt, collection, opts, and
+;; the input and selected text it ended with.
+(var last-read nil)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -369,6 +372,11 @@ in any order, anywhere in a candidate.
 (fn close []
   "End the current minibuffer session, returning it."
   (let [s session]
+    (when (and s s.repeat)
+      (set s.repeat.collection s.collection)
+      (set s.repeat.input s.input)
+      (let [c (. s.matches s.selected)]
+        (set s.repeat.selected (and c c.text))))
     (when s
       (: s.tap :stop)
       (when s.flash-timer (: s.flash-timer :stop))
@@ -454,7 +462,8 @@ in any order, anywhere in a candidate.
                                               to show instead of the candidates;
                                               include PROMPT-LINE, the input line
     :suffix (fn [input])                      text shown highlighted after the input,
-                                              e.g. how it is read"
+                                              e.g. how it is read
+    :no-repeat true                           leave it out of `repeat`"
   (close)
   (hide)
   (set session {: prompt
@@ -473,6 +482,9 @@ in any order, anywhere in a candidate.
                 :view opts.view
                 :suffix opts.suffix
                 :tap (hs.eventtap.new [hs.eventtap.event.types.keyDown] on-key)})
+  (when (not opts.no-repeat)
+    (set last-read {: prompt : opts})
+    (set session.repeat last-read))
   (when collection
     (set session.collection (icollect [_ c (ipairs collection)] (normalize c))))
   (refilter)
@@ -517,13 +529,30 @@ in any order, anywhere in a candidate.
   (let [no #(if on-no (on-no) (message "Quit"))]
     (completing-read (.. prompt " (y or n) ") []
                      {:actions {:y #(on-yes) :n no}
+                      :no-repeat true
                       :on-accept no
                       :on-cancel no})))
+
+(fn repeat []
+  "Reopen the last minibuffer session with its input and selection, like
+  vertico-repeat."
+  (if (not last-read)
+      (message "No earlier minibuffer session")
+      (let [{: prompt : collection : opts : input : selected} last-read]
+        (completing-read prompt collection opts)
+        (when (and input (not= input ""))
+          (set-input input (length input)))
+        (let [i (and selected
+                     (accumulate [found nil i c (ipairs session.matches)]
+                       (or found (when (= c.text selected) i))))]
+          (when i (select i)))
+        (render))))
 
 {: message
  :clear (fn [] "Clear the echo area unless the minibuffer is reading."
           (when (not session) (hide)))
  : completing-read
+ : repeat
  : max-chars
  :set-input (fn [input] "Replace the input of the active `completing-read`."
               (when session

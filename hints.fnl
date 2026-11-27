@@ -1337,7 +1337,7 @@ M-RET hovers.
   (case (hint-set action)
     :text (text-candidates)
     :drag (drag-candidates)
-    _ (collect-candidates)))
+    _ (collect-candidates (and state state.pick))))
 
 (fn refresh [shown]
   "Relabel what is on screen now that an action may have changed it, unless
@@ -1651,7 +1651,7 @@ M-RET hovers.
   reach a fixpoint (some appeared and the next scan found the same); rescans
   also stop once a label is being typed, or when the time is up."
   (set state.rescans (+ state.rescans 1))
-  (let [(candidates info) (collect-candidates)
+  (let [(candidates info) (collect-candidates state.pick)
         previous state.web-hints]
     (each [pid asked? (pairs info.fresh)]
       (tset state.fresh pid asked?))
@@ -1664,15 +1664,22 @@ M-RET hovers.
               (>= state.rescans rescan-limit))
       (: state.rescanner :stop))))
 
-(fn show-hints []
-  "Label every clickable element on screen and wait for a label to be typed."
+(fn show-hints [?pick ?none ?retried]
+  "Label every clickable element on screen and wait for a label to be typed.
+  ?PICK replaces `clickable?` (see `collect-candidates`); ?NONE is the message
+  when nothing is found."
   (hide-hints)
-  (let [(candidates info) (collect-candidates)]
-    (if (= (length candidates) 0)
-        (minibuffer.message "No clickable elements found")
+  (let [pick (when (= (type ?pick) :function) ?pick)
+        (candidates info) (collect-candidates pick)]
+    (if (and (= (length candidates) 0) (next info.fresh) (not ?retried))
+        ;; Web content just woken may take a moment to show up.
+        (hs.timer.doAfter rescan-interval #(show-hints pick ?none true))
+        (= (length candidates) 0)
+        (minibuffer.message (or ?none "No clickable elements found"))
         (do
           (label! candidates)
           (set state {:hints candidates
+                      : pick
                       :typed ""
                       :canvases (make-canvases)
                       :hud-screen (: (hs.screen.mainScreen) :id)
@@ -2846,7 +2853,32 @@ M-RET hovers.
 
 (set caret-mode (define-caret-mode))
 
+(fn link? [_ role]
+  (= role :AXLink))
+
+(fn show-link-hints []
+  "Label only the links, like ace-link."
+  (show-hints link? "No links found"))
+
+(fn menu-search []
+  "Choose one of the frontmost app's menu items by name and pick it, like
+  M-x for menus."
+  (let [app (hs.application.frontmostApplication)
+        all (if app (menu-candidates app) [])
+        apple? #(= ($.text:sub 1 (length "Apple ›")) "Apple ›")
+        ;; The app's own menus first, the Apple menu last.
+        items (icollect [_ c (ipairs all)] (when (not (apple? c)) c))]
+    (each [_ c (ipairs all)] (when (apple? c) (table.insert items c)))
+    (if (= (length items) 0)
+        (minibuffer.message "No menu items")
+        (minibuffer.completing-read
+         (.. (app:name) " menu: ")
+         items
+         {:on-accept (fn [c] (when c (press c.element)))}))))
+
 {: show-hints
+ : show-link-hints
+ : menu-search
  : hide-hints
  : scroll-mode
  : search

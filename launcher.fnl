@@ -168,6 +168,10 @@ The items you pick most often move to the top.
   {: text :annotation :System :kind :command :run f : keywords
    :id (.. "command:" text)})
 
+(fn via [module f]
+  "Call F of MODULE, required only when it runs."
+  #((. (require module) f)))
+
 (fn system-commands []
   [(command "Lock Screen" hs.caffeinate.lockScreen)
    (command "Sleep" hs.caffeinate.systemSleep)
@@ -211,7 +215,42 @@ The items you pick most often move to the top.
             "clipboard record incognito private")
    (command "Clear Clipboard History…"
             (confirm "Clear the clipboard history?"
-                     #((. (require :clipboard) :clear))))])
+                     #((. (require :clipboard) :clear))))
+   (command "Reload Hammerspoon" #((. (require :quit) :reload)) "config restart")
+   (command "Relaunch Hammerspoon" #((. (require :quit) :relaunch)) "restart")
+   (command "Quit Hammerspoon…" #((. (require :quit) :quit)) "exit")
+   (command "Hammerspoon Console" hs.toggleConsole "log repl")
+   (command "Clear Hammerspoon Console" #((. (require :quit) :clear-console)) "log")
+   (command "Switch App" (via :buffers :switch-to-app) "buffer")
+   (command "Switch Window" (via :buffers :switch-to-window) "buffer")
+   (command "List Apps" (via :buffers :list-apps) "ibuffer buffers")
+   (command "Last App" (via :buffers :last-app) "buffer previous")
+   (command "Hide App" (via :buffers :bury-app) "bury buffer")
+   (command "New Window" (via :buffers :new-window) "clone buffer")
+   (command "Find File" (via :files :find-file) "open spotlight")
+   (command "Recent Files" (via :files :recent-files) "recentf open")
+   (command "Reveal File in Finder" (via :files :reveal) "dired jump")
+   (command "Copy File Path" (via :files :copy-path) "yank name")
+   (command "Copy File…" (via :files :duplicate) "duplicate")
+   (command "Rename File…" (via :files :rename) "move")
+   (command "Move File to Trash…" (via :files :trash) "delete")
+   (command "Visit Hammerspoon Config" (via :files :visit-config) "emacs init edit")
+   (command "Set Bookmark" (via :bookmarks :bookmark-set) "mark")
+   (command "Jump to Bookmark" (via :bookmarks :bookmark-jump) "mark")
+   (command "Delete Bookmark" (via :bookmarks :bookmark-delete) "mark")
+   (command "Search Menu Items" (via :hints :menu-search) "menu bar imenu")
+   (command "Link Hints" (via :hints :show-link-hints) "ace link avy")
+   (command "Repeat Minibuffer" (via :lib.minibuffer :repeat) "resume vertico")
+   (command "Shell Command" (via :shell :shell-command) "run terminal")
+   (command "Select Window" (via :ace-window :select-window) "ace avy")
+   (command "Delete Window" (via :ace-window :delete-window) "ace close")
+   (command "Swap Window" (via :ace-window :swap-window) "ace")
+   (command "Start Keyboard Macro" (via :kmacro :start) "kmacro record")
+   (command "Stop Keyboard Macro" (via :kmacro :stop) "kmacro record")
+   (command "Call Keyboard Macro" (via :kmacro :call-last) "kmacro replay")
+   (command "Name Keyboard Macro" (via :kmacro :name-last) "kmacro save")
+   (command "Run Keyboard Macro" (via :kmacro :run-named) "kmacro replay")
+   (command "Delete Keyboard Macro" (via :kmacro :delete-named) "kmacro")])
 
 (fn volume-commands []
   (let [acc []]
@@ -235,7 +274,8 @@ The items you pick most often move to the top.
         (let [name (or (: app :name) "?")]
           (each [_ [verb f] (ipairs [[:Quit #(: app :kill)]
                                      [:Hide #(: app :hide)]
-                                     ["Force Quit" #(: app :kill9)]])]
+                                     ["Force Quit" #(: app :kill9)]
+                                     [:Relaunch #((. (require :buffers) :relaunch) app)]])]
             (table.insert acc {:text (.. verb " " name)
                                :annotation "Running"
                                :kind :command
@@ -541,12 +581,24 @@ The items you pick most often move to the top.
 (var warm-timer nil)
 (var apps-watchers nil)
 
-(fn show []
-  "Open the launcher in the minibuffer."
+(fn show [?input]
+  "Open the launcher in the minibuffer, with ?INPUT typed in, e.g. ' to start
+  a file search."
   (minibuffer.completing-read "Run: " (collection)
                               {:on-accept accept
                                : dynamic
-                               : actions}))
+                               : actions})
+  (when (= (type ?input) :string) (minibuffer.set-input ?input)))
+
+(fn file-candidate [path]
+  {:text (basename path) :annotation (abbreviate (dirname path)) :kind :file
+   : path})
+
+(fn read-file [prompt paths]
+  "Read one of PATHS in the minibuffer and open it, with the launcher's file
+  keys (s-RET reveals, M-w copies the path, s-y, s-e, C-.)."
+  (minibuffer.completing-read prompt (icollect [_ p (ipairs paths)] (file-candidate p))
+                              {:on-accept accept : actions}))
 
 (fn init []
   "Read the apps, Settings panes and shortcuts ahead of the first show, which
@@ -561,6 +613,9 @@ The items you pick most often move to the top.
 
 {: init
  : show
+ : read-file
+ : open
+ : abbreviate
  : system-commands
  : collection
  : calculate
