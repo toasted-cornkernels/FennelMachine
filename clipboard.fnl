@@ -116,6 +116,8 @@ quoted, or unquoted with a digit (so code like token = get_token() passes)."
 
 (fn clear []
   (set entries [])
+  ;; The paste picker's repeat state holds the entries too.
+  (minibuffer.clear-history)
   (minibuffer.message "Clipboard history cleared"))
 
 (fn confirm-clear []

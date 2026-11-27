@@ -135,6 +135,14 @@ play it in a background mpv, which the Media keys also control"
            last (play last)
            (choose-station))))))
 
+(fn history-count [] (if (hs.settings.get last-station-key) 1 0))
+
+(fn clear-history []
+  "Forget the last station played."
+  (hs.settings.clear last-station-key))
+
 {: choose-station
+ : history-count
+ : clear-history
  : stop
  : toggle}

@@ -201,5 +201,225 @@ is never offered alone or cut short."
                     (set j (+ j 1))))))))
     candidates))
 
+;;; Dictation markers: spoken punctuation, line breaks and "stop dictation"
+
+;; After a Korean marker these make it a word in the sentence: 마침표 찍어,
+;; 세 줄 요약
+(local korean-not-markers
+       ["요약" "정도" "짜리" "이상" "이하" "더" "씩" "만" "추가" "넣" "빼" "삭제"
+        "찍" "대신" "없" "있" "하나" "두" "세 개"])
+
+(local dictation-markers
+       ;; :say forms are matched as whole words, spaces standing for any run of
+       ;; spaces; Japanese ones (:glued) may sit right against other text.
+       [{:say ["new line" "newline" "line break"] :newline 1}
+        {:say ["new paragraph"] :newline 2}
+        {:say ["question mark"] :mark "?"}
+        {:say ["exclamation mark" "exclamation point"] :mark "!"}
+        {:say ["period" "full stop"] :mark "." :unless-next ["of"]}
+        {:say ["comma"] :mark "," :unless-next ["separated" "delimited" "separator"]}
+        {:say ["colon"] :mark ":"}
+        {:say ["semicolon" "semi-colon" "semi colon"] :mark ";"}
+        {:say ["stop dictation" "end dictation"] :stop true}
+        {:say ["mark" "point"] :residue true}
+        ;; Korean, with what whisper makes of 새 줄 (three lines: 세 줄, 3줄);
+        ;; 세 줄 요약 really is three lines
+        {:say ["새 줄" "새줄" "줄 바꿈" "줄바꿈" "세 줄" "세줄" "3줄" "새출" "새술" "세술"] :newline 1
+         :unless-next korean-not-markers}
+        {:say ["새 문단" "새문단" "새 단락" "새단락" "세 문단" "문단 바꿈"] :newline 2
+         :unless-next korean-not-markers}
+        {:say ["마침표" "온점"] :mark "." :unless-next korean-not-markers}
+        {:say ["쉼표" "심표" "반점"] :mark "," :unless-next korean-not-markers}
+        {:say ["물음표"] :mark "?" :unless-next korean-not-markers}
+        {:say ["느낌표"] :mark "!" :unless-next korean-not-markers}
+        {:say ["받아쓰기 중지" "받아쓰기 끝" "받아쓰기 종료"] :stop true}
+        ;; Japanese, with whisper's homophones (開業, 簡単符, 区点, 等点)
+        {:say ["改行" "開業" "開行"] :newline 1 :glued true
+         :unless-next ["コード" "文字" "医" "届" "資金" "準備"]}
+        {:say ["新しい段落" "改段落"] :newline 2 :glued true}
+        {:say ["句点" "区点" "苦点" "くてん"] :mark "。" :glued true}
+        {:say ["9点"] :mark "。" :glued true :alone true}
+        {:say ["く点"] :mark "。" :glued true :ends true}
+        {:say ["読点" "糖点" "等点" "当点" "とうてん"] :mark "、" :glued true}
+        {:say ["疑問符" "疑問不" "疑問婦" "はてなマーク" "クエスチョンマーク"] :mark "？" :glued true}
+        {:say ["感嘆符" "簡単符" "簡単譜" "簡単不" "びっくりマーク" "エクスクラメーションマーク"] :mark "！"
+         :glued true}
+        {:say ["音声入力終了" "音声入力停止"] :stop true :glued true}])
+
+(local determiners
+       (collect [_ w (ipairs ["a" "an" "the" "this" "that" "these" "those" "each"
+                              "every" "no" "one" "my" "your" "our" "their" "his"
+                              "her" "its" "per" "any" "some" "which" "what"
+                              ;; instructions about the mark rather than the mark
+                              "add" "insert" "put" "use" "remove" "delete" "replace"
+                              "with" "without" "type" "missing" "extra" "trailing"])]
+         w true))
+
+;; After a Japanese marker these make it a word in the sentence: 改行を入れる
+(local japanese-particles
+       (collect [_ c (utf8.codes "をがはのにもでとしすさせやへ")] c true))
+
+(local auto-punctuation (collect [_ c (utf8.codes ".,?!;:、。？！") ] c true))
+(local commas (collect [_ c (utf8.codes ",;、") ] c true))
+
+(fn space? [c] (or (= c 32) (= c 9) (= c 10) (= c 0x3000)))
+
+(fn match-form [t i f]
+  "The index where form F (codepoints) ends if it is at I in T; a space in F
+stands for any run of whitespace."
+  (var j i)
+  (var ok true)
+  (each [_ c (ipairs f) &until (not ok)]
+    (if (= c 32)
+        (if (space? (. t j))
+            (while (space? (. t j)) (set j (+ j 1)))
+            (set ok false))
+        (if (= (fold (or (. t j) -1)) (fold c))
+            (set j (+ j 1))
+            (set ok false))))
+  (when ok (- j 1)))
+
+(fn word-before [t i]
+  "The word ending just before the spaces before I in T, lower case, and where
+it starts; nil if punctuation comes first."
+  (var j (- i 1))
+  (while (space? (. t j)) (set j (- j 1)))
+  (let [e j]
+    (while (and (. t j) (char-class (. t j))) (set j (- j 1)))
+    (when (< j e)
+      (values (table.concat (fcollect [k (+ j 1) e] (utf8.char (fold (. t k)))))
+              (+ j 1)))))
+
+(fn starts-with? [t i word]
+  (let [w (codepoints word)]
+    (and (match-at? t i w)
+         (let [class (char-class (. w (length w)))]
+           (or (= class :han) (= class :katakana) (= class :hangul)
+               (not= class (char-class (. t (+ i (length w))))))))))
+
+(fn next-word-in? [t e words glued]
+  (var j (+ e 1))
+  (when (not glued) (while (space? (. t j)) (set j (+ j 1))))
+  (accumulate [found false _ w (ipairs (or words [])) &until found]
+    (starts-with? t j w)))
+
+(local marker-forms
+       (let [forms []]
+         (each [_ m (ipairs dictation-markers)]
+           (each [_ s (ipairs m.say)]
+             (table.insert forms {:f (codepoints s) : m})))
+         (table.sort forms #(> (length $1.f) (length $2.f)))
+         forms))
+
+(fn marker-at? [t i]
+  (accumulate [found false _ {: f} (ipairs marker-forms) &until found]
+    (not= nil (match-form t i f))))
+
+(fn ends? [t e]
+  "Whether nothing but punctuation, spaces, the end or another marker follows E
+in T."
+  (let [after (. t (+ e 1))]
+    (or (= after nil) (space? after) (. auto-punctuation after)
+        (marker-at? t (+ e 1)))))
+
+(fn alone? [t i e]
+  "Whether I..E in T stands apart: punctuation or the start before it, and
+nothing but punctuation, spaces, the end or another marker after it."
+  (let [before (. t (- i 1))]
+    (and (or (= before nil) (. auto-punctuation before)) (ends? t e))))
+
+(fn find-markers [t]
+  "The dictation markers in T as {: start : end : marker : literal} in order,
+the longest one winning where they overlap."
+  (let [found []]
+    (var i 1)
+    (while (<= i (length t))
+      (var hit nil)
+      (each [_ {: f : m} (ipairs marker-forms) &until hit]
+        (let [e (match-form t i f)
+              first (char-class (. f 1))
+              last (char-class (. f (length f)))]
+          (when (and e
+                     (if m.glued
+                         (not (. japanese-particles (or (. t (+ e 1)) -1)))
+                         (and (not= first (char-class (. t (- i 1))))
+                              (not= last (char-class (. t (+ e 1))))
+                              ;; comma-separated, semicolon's
+                              (not= 45 (. t (+ e 1))) (not= 39 (. t (+ e 1)))))
+                     (or (not m.alone) (alone? t i e))
+                     (or (not m.ends) (ends? t e))
+                     (not (next-word-in? t e m.unless-next m.glued)))
+            (let [(before at) (word-before t i)]
+              (if m.residue
+                  ;; whisper wrote "question" as "?" and left "mark"
+                  (let [p (do (var j (- i 1))
+                              (while (space? (. t j)) (set j (- j 1)))
+                              (. t j))
+                        a (do (var j (+ e 1))
+                              (while (space? (. t j)) (set j (+ j 1)))
+                              (. t j))]
+                    (when (and (or (= p 63) (= p 33))
+                               (or (= a nil) (. auto-punctuation a) (marker-at? t (+ e 1))))
+                      (set hit {:start i :end e :marker {:mark (utf8.char p)}})))
+                  (= before "literal")
+                  (set hit {:start at :end e :literal i})
+                  (not (. determiners (or before "")))
+                  (set hit {:start i :end e :marker m}))))))
+      (if hit
+          (do (table.insert found hit)
+              (set i (+ hit.end 1)))
+          (set i (+ i 1))))
+    found))
+
+(fn markers [text]
+  "TEXT with its spoken dictation markers carried out: \"new line\", \"question
+mark\" and the like, in English, Korean and Japanese. A spoken mark replaces
+the punctuation whisper put around it; \"literal comma\" writes the word, and so
+does a marker used as a noun (\"add a new line\", 改行を入れる). Returns the
+text and whether \"stop dictation\" ended it there."
+  (let [t (or (codepoints (-> text (string.gsub "%?%?+" "?") (string.gsub "!!+" "!")))
+              [])
+        out []]
+    (var keep 0) ; what was spoken stays: no trimming below this
+    (var lead false) ; skip whisper's punctuation and spaces after a marker
+    (var space false)
+    (var cap false)
+    (var stopped false)
+    (fn trim [chars]
+      (while (and (> (length out) keep) (. chars (. out (length out))))
+        (table.remove out)))
+    (local blanks {32 true 9 true 10 false 0x3000 true})
+    (fn emit [from to]
+      (for [k from to]
+        (let [c (. t k)]
+          (if (and lead (or (. blanks c) (. auto-punctuation c)))
+              nil
+              (do (when lead
+                    (when (and space (char-class c)) (table.insert out 32))
+                    (set lead false))
+                  (table.insert out (if (and cap (<= 97 c 122)) (- c 32) c))
+                  (set cap false))))))
+    (var i 1)
+    (each [_ hit (ipairs (find-markers t)) &until stopped]
+      (emit i (- hit.start 1))
+      (let [m hit.marker]
+        (if hit.literal
+            (emit hit.literal hit.end)
+            m.stop
+            (do (trim blanks) (trim commas) (trim blanks) (set stopped true))
+            m.newline
+            (do (trim blanks) (trim commas) (trim blanks)
+                (for [_ 1 m.newline] (table.insert out 10))
+                (set [keep lead space cap] [(length out) true false true]))
+            (do (trim blanks) (trim auto-punctuation) (trim blanks)
+                (each [_ c (utf8.codes m.mark)] (table.insert out c))
+                (set [keep lead space] [(length out) true (< (. (codepoints m.mark) 1) 128)])
+                (set cap (not= nil (string.find ".?!" m.mark 1 true))))))
+      (set i (+ hit.end 1)))
+    (when (not stopped) (emit i (length t)))
+    (set keep 0)
+    (trim blanks)
+    (values (table.concat (icollect [_ c (ipairs out)] (utf8.char c))) stopped)))
+
 {: char-class : replace : corrections-for : correct : clean : language-of : prompt
- : utf16-length : needs-space? : kana-tail? : word-candidates}
+ : utf16-length : needs-space? : kana-tail? : word-candidates : markers}

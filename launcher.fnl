@@ -250,7 +250,14 @@ The items you pick most often move to the top.
    (command "Call Keyboard Macro" (via :kmacro :call-last) "kmacro replay")
    (command "Name Keyboard Macro" (via :kmacro :name-last) "kmacro save")
    (command "Run Keyboard Macro" (via :kmacro :run-named) "kmacro replay")
-   (command "Delete Keyboard Macro" (via :kmacro :delete-named) "kmacro")])
+   (command "Delete Keyboard Macro" (via :kmacro :delete-named) "kmacro")
+   (command "Clear Keyboard Macros…" (via :kmacro :confirm-clear) "kmacro forget")
+   (command "Clear Shell Command History…" (via :shell :confirm-clear) "forget")
+   (command "Clear Eval History…" (via :eval :confirm-clear) "fennel forget")
+   (command "Clear History…" (via :privacy :clear-history)
+            "forget privacy security recent macros shell launcher")
+   (command "Clear All History…" (via :privacy :confirm-clear-all)
+            "forget everything privacy security")])
 
 (fn volume-commands []
   (let [acc []]
@@ -304,6 +311,12 @@ The items you pick most often move to the top.
     (let [counts (usage)]
       (tset counts candidate.id (+ 1 (or (. counts candidate.id) 0)))
       (hs.settings.set usage-key counts))))
+
+(fn history-count [] (accumulate [n 0 _ (pairs (usage))] (+ n 1)))
+
+(fn clear-history []
+  "Forget how often each item was picked, so none is ranked first."
+  (hs.settings.clear usage-key))
 
 (fn by-usage [candidates]
   "CANDIDATES, most used first, otherwise in their original order."
@@ -617,6 +630,8 @@ The items you pick most often move to the top.
  : open
  : abbreviate
  : system-commands
+ : history-count
+ : clear-history
  : collection
  : calculate
  : url-of

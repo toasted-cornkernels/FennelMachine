@@ -310,7 +310,10 @@
 (local repeat-bindings
        [{:key :l :title "Repeat Minibuffer" :action "lib.minibuffer:repeat"}
         {:key :b :title "Switch App" :action "buffers:switch-to-app"}
-        {:key :f :title "Recent Files" :action "files:recent-files"}])
+        {:key :f :title "Recent Files" :action "files:recent-files"}
+        {:key :c :title "Clear History…" :action "privacy:clear-history"}
+        {:mods [:shift] :key :c :title "Clear All History…"
+         :action "privacy:confirm-clear-all"}])
 
 ;; Keyboard macros (kmacro.fnl), on Emacs' C-x ( ) e.
 (local kmacro-bindings
@@ -320,7 +323,8 @@
         {:key :e :title "Call Last Macro" :action "kmacro:call-last"}
         {:key :n :title "Name Last Macro" :action "kmacro:name-last"}
         {:key :r :title "Run Named Macro" :action "kmacro:run-named"}
-        {:key :d :title "Delete Named Macro" :action "kmacro:delete-named"}])
+        {:key :d :title "Delete Named Macro" :action "kmacro:delete-named"}
+        {:key :c :title "Clear All Macros…" :action "kmacro:confirm-clear"}])
 
 ;; Hammerspoon itself, as Emacs' SPC q.
 (local quit-bindings

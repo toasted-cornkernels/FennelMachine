@@ -76,6 +76,14 @@ return to the last Space, pick one from a list, add and close desktops"
           (table.insert recent s)))
       (hs.settings.set recent-key recent))))
 
+(fn history-count [] (length recent))
+
+(fn clear-history []
+  "Forget the order Spaces were shown in, but for the current one."
+  (set recent [])
+  (hs.settings.clear recent-key)
+  (visit (hs.spaces.focusedSpace)))
+
 (fn last-space []
   "Go back to the previously shown Space, like tab-recent."
   (let [focused (hs.spaces.focusedSpace)
@@ -195,6 +203,8 @@ return to the last Space, pick one from a list, add and close desktops"
 
 (local exports
        {: init
+        : history-count
+        : clear-history
         : goto-space
         : goto-space-number
         : space-left

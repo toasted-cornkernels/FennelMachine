@@ -78,4 +78,38 @@
          (is.eq? (vt.language-of "ビジ") :ja "katakana")
          (is.eq? (vt.language-of "日時") :ja "kanji")
          (is.eq? (vt.language-of "장치") :ko "hangul")
-         (is.eq? (vt.language-of "emacs") :en "latin")))))
+         (is.eq? (vt.language-of "emacs") :en "latin")))
+
+   (it "carries out spoken dictation markers"
+       (fn []
+         (is.eq? (vt.markers "Hello world new line second line.") "Hello world\nSecond line." "new line")
+         (is.eq? (vt.markers "First point. New paragraph. Second point.") "First point.\n\nSecond point." "new paragraph")
+         (is.eq? (vt.markers "Dear team, comma, thanks for the help period.") "Dear team, thanks for the help." "marks replace whisper's punctuation")
+         (is.eq? (vt.markers "Is it done?? Question mark") "Is it done?" "whisper's own doubled mark")
+         (is.eq? (vt.markers "Really question mark exclamation mark") "Really?!" "spoken marks stay")
+         (is.eq? (vt.markers "Hi Bob, how are you? Mark.") "Hi Bob, how are you?" "what whisper left of question mark")
+         (is.eq? (vt.markers "New line.") "\n" "only a marker")
+         (is.eq? (vt.markers "이거 봐 question mark") "이거 봐?" "English marker in Korean")
+         (is.eq? (vt.markers "다 됐어. 물음표 3줄 다음 항목 쉼표 그리고 나머지 느낌표.") "다 됐어?\n다음 항목, 그리고 나머지!" "Korean, with 3줄 for 새 줄")
+         (is.eq? (vt.markers "こんにちは、開業よろしくお願いします。") "こんにちは\nよろしくお願いします。" "Japanese, with 開業 for 改行")
+         (is.eq? (vt.markers "本当ですか?疑問不?本当です。簡単不。") "本当ですか？本当です！" "Japanese homophones")))
+
+   (it "leaves markers used as words alone"
+       (fn []
+         (each [_ s (ipairs ["Add a new line after the header." "Over a period of time."
+                             "Remove the trailing comma" "Make it comma-separated"
+                             "Make it comma separated" "Use semicolon here"
+                             "Why? Point taken." "세 줄 요약해 줘" "새 줄을 추가해 줘"
+                             "마침표 찍어 줘" "改行を入れてください" "改行コードを確認して"
+                             "今日のテスト。9点だった" "よく点検して"])]
+           (is.eq? (vt.markers s) s s))
+         (is.eq? (vt.markers "Type the word literal comma in the box.") "Type the word comma in the box." "literal")))
+
+   (it "stops at stop dictation"
+       (fn []
+         (let [(text stopped) (vt.markers "The meeting is at noon period. Stop dictation and this is ignored.")]
+           (is.eq? text "The meeting is at noon." "en text")
+           (is.eq? stopped true "en stopped"))
+         (is.eq? (vt.markers "회의는 내일이야 마침표 받아쓰기 중지 이건 무시") "회의는 내일이야." "ko")
+         (is.eq? (vt.markers "会議は明日です。9点音声入力終了。これは無視。") "会議は明日です。" "ja")
+         (is.eq? (select 2 (vt.markers "No markers here.")) false "not stopped")))))

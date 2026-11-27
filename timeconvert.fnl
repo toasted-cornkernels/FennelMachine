@@ -70,4 +70,10 @@ echo area and copies it.
                            (show-result from zone)
                            (minibuffer.message (.. "Unknown time zone: " input)))))}))}))
 
-{: convert}
+(fn history-count [] (length (or (hs.settings.get recent-key) [])))
+
+(fn clear-history []
+  "Forget the recently used zones."
+  (hs.settings.clear recent-key))
+
+{: convert : history-count : clear-history}

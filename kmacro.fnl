@@ -1,6 +1,7 @@
 "
 Keyboard macros, like Emacs' kmacro: record the keys you type, replay them,
-name and keep them across reloads.
+name and keep them across reloads. `clear-history` forgets them all, since
+a macro may hold whatever was typed while recording.
 
 Recording stops from the leader menu, so the keys from the last leader chord
 on (the stop command itself) are left out. A macro may still use the leader
@@ -169,6 +170,27 @@ in the middle: replayed keys run hotkeys like typed ones.
                   (hs.settings.set named-key saved)
                   (minibuffer.message (.. "Deleted macro " name))))))
 
+(fn history-count []
+  "The number of kept macros: the last one and the named ones."
+  (+ (if (hs.settings.get last-key) 1 0)
+     (accumulate [n 0 _ (pairs (named))] (+ n 1))))
+
+(fn clear-history []
+  "Forget the last macro and every named one, and drop a recording in progress."
+  (when recording
+    (recording.tap:stop)
+    (when recording.menubar (recording.menubar:delete))
+    (set recording nil))
+  (hs.settings.clear last-key)
+  (hs.settings.clear named-key)
+  (minibuffer.clear-history))
+
+(fn confirm-clear []
+  "Forget every keyboard macro after asking."
+  (minibuffer.y-or-n-p "Forget every keyboard macro?"
+                       #(do (clear-history)
+                            (minibuffer.message "Keyboard macros cleared"))))
+
 {: start
  : stop
  : toggle
@@ -177,5 +199,8 @@ in the middle: replayed keys run hotkeys like typed ones.
  : name-last
  : run-named
  : delete-named
+ : history-count
+ : clear-history
+ : confirm-clear
  : trim-leader
  : play}

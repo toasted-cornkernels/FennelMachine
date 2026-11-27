@@ -510,11 +510,12 @@ in any order, anywhere in a candidate.
         (when (= c selected) (select i))))
     (render)))
 
-(fn message [text seconds]
+(fn message [text seconds unlogged?]
   "Show TEXT in the echo area, like Emacs' `message`. It is also printed to
-  the Hammerspoon console, which plays the part of *Messages*."
+  the Hammerspoon console, which plays the part of *Messages*, unless
+  UNLOGGED?."
   (let [text (tostring text)]
-    (print (.. "message: " text))
+    (when (not unlogged?) (print (.. "message: " text)))
     (if session
         (do (flash text) (render))
         (do
@@ -548,7 +549,13 @@ in any order, anywhere in a candidate.
           (when i (select i)))
         (render))))
 
+(fn clear-history []
+  "Forget the last session, so `repeat` can't bring back its input."
+  (set last-read nil))
+
 {: message
+ :history-count #(if last-read 1 0)
+ : clear-history
  :clear (fn [] "Clear the echo area unless the minibuffer is reading."
           (when (not session) (hide)))
  : completing-read

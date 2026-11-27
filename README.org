@@ -206,7 +206,8 @@ minibuffer is active, a message appears after the input as =[message]=.
 
 =Cmd-SPC r l= reopens the last minibuffer session (search, launcher, switcher,
 …) with its input and selection, like =vertico-repeat=; =y or n= questions are
-left out.
+left out. It is kept in memory only; =Cmd-SPC r c= can forget it (see [[*Clearing history (=Cmd-SPC r c=)][Clearing
+history]]).
 
 ** Keyboard Shortcuts commands (=Cmd-SPC k=)
 
@@ -243,7 +244,8 @@ sleep, restart, shut down, log out, empty or open the Trash, eject, dark mode, k
 awake, media and volume controls, opening mpv, clipboard history, converting a time
 between time zones), Hammerspoon itself (reload, relaunch, quit, its console), the
 leader's commands below (switching apps and windows, file, bookmark, macro, shell
-and window-picking commands, menu search, link hints, repeating the minibuffer),
+and window-picking commands, menu search, link hints, repeating the minibuffer,
+clearing history),
 every Keyboard Shortcuts command, and =Quit=, =Hide=, =Force Quit= and =Relaunch=
 for each running app. The ones you pick most often
 move to the top. Depending on what you type, it also offers:
@@ -463,12 +465,16 @@ annotated with its shortcut), the app's menus before the Apple menu.
 | =K n= | name the last macro, to keep it              |
 | =K r= | play a named macro (it becomes the last one) |
 | =K d= | delete a named macro                         |
+| =K c= | forget every macro (asks first)              |
 
 While recording, the menu bar shows =● Macro=. Recording stops from the leader
 menu, so the keys from the last leader chord on (=Cmd-SPC K )= itself) are left
 out. A macro can use the leader in the middle: replayed keys trigger hotkeys like
 typed ones. Only key presses are recorded (with their modifiers), not mouse
-clicks. The last macro and the named ones are kept in =hs.settings=.
+clicks. The last macro and the named ones are kept in =hs.settings=, so a
+password typed while recording would be kept too (macOS hides keys typed in
+secure fields from the recorder, but not elsewhere). =K c= forgets them all and
+drops a recording in progress.
 
 ** Shell command (=Cmd-SPC !=)
 
@@ -476,8 +482,13 @@ clicks. The last macro and the named ones are kept in =hs.settings=.
 the home folder, like =async-shell-command=. Up to three short lines of output
 show in the echo area, longer output in the help viewer, with the exit code when
 it isn't 0. Earlier commands (the last 100, kept in =hs.settings=) are offered
-below what you type; =RET= on the first candidate runs the input as typed. To run
-a command in a terminal window instead, type =$ command= in the launcher.
+below what you type; =RET= on the first candidate runs the input as typed, and
+=s-DEL= forgets the selected earlier command. As with the shell's
+=HISTCONTROL=ignorespace=, a command typed with a leading space isn't kept, nor is
+one that looks like it holds a secret (by the clipboard's rules, e.g. =export
+API_TOKEN='...'=); such a command and its output also stay out of the console
+(*Messages*) and out of =r l=. Clearing the history also forgets =r l=. To run a command in a terminal window instead, type =$ command=
+in the launcher.
 
 ** Spaces (=Cmd-SPC t=, =Cmd-SPC [= / =]=)
 
@@ -530,7 +541,40 @@ kept in =hs.settings=; =Cmd-SPC w u= undoes a restore.
 
 Quitting, force quitting and relaunching apps moved to =Cmd-SPC b= (above), and
 =Cmd-SPC r= is now the resume/recent menu: =r l= repeats the last minibuffer
-session, =r b= switches apps and =r f= opens a recent file.
+session, =r b= switches apps, =r f= opens a recent file, and =r c= / =r C= clear
+history (below).
+
+** Clearing history (=Cmd-SPC r c=)
+
+Whatever a command recalls from a history can be cleared. =privacy.fnl= lists
+them all:
+
+| History               | Kept      | Also cleared by                  |
+|-----------------------+-----------+----------------------------------|
+| Clipboard history     | in memory | =y c=                            |
+| Keyboard macros       | on disk   | =K c=; =K d= deletes one         |
+| Shell commands        | on disk   | =s-DEL= on one in =Cmd-SPC !=    |
+| Eval expressions      | on disk   | =s-DEL= on one in =Cmd-SPC :=    |
+| Minibuffer repeat     | in memory | (the input =r l= brings back)    |
+| Launcher usage counts | on disk   | (how often each item was picked) |
+| Hammerspoon console   | in memory | =q c= (also *Messages*, =h e=)   |
+| Recent time zones     | on disk   |                                  |
+| Recent Spaces         | on disk   | (the order for =t TAB=)          |
+| Last radio station    | on disk   |                                  |
+
+| Key   | Action                                                       |
+|-------+--------------------------------------------------------------|
+| =r c= | pick a history, or =Everything=, and clear it (asks first)   |
+| =r C= | clear every history (asks first)                             |
+
+The picker shows how many entries each one holds. The launcher has the same
+commands (=Clear History…=, =Clear All History…=), plus =Clear Keyboard Macros…=,
+=Clear Shell Command History…=, =Clear Eval History…= and =Clear Clipboard
+History…=. "On disk" means =hs.settings=
+(=~/Library/Preferences/org.hammerspoon.Hammerspoon.plist=); "in memory" is gone
+on reload anyway. Bookmarks, saved layouts and voice corrections aren't
+histories but things you keep on purpose; their own commands delete them. Recent
+files come from Spotlight's last-used dates, which belong to macOS.
 
 ** Embark (=Cmd-SPC e e=)
 
@@ -571,8 +615,10 @@ and opens that pane.
 
 =eval.fnl= evaluates a Fennel expression in Hammerspoon, like Emacs' =M-:=. Short
 values go to the echo area, long ones to the help HUD; errors are echoed, with the
-traceback in the console. Earlier expressions are offered as candidates, and =RET=
-with an empty input evaluates the selected one again.
+traceback in the console. Earlier expressions (the last 50, in =hs.settings=) are
+offered as candidates, and =RET= with an empty input evaluates the selected one
+again; =s-DEL= forgets the selected one. Like shell commands, an expression typed
+with a leading space or holding a secret isn't kept, logged, or repeated by =r l=.
 
 ** REPL (Emacs' =fennel-mode=)
 

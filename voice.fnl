@@ -11,7 +11,9 @@ audio-input entitlement. So Hammerspoon records and Emacs drives it over hs.ipc:
 Emacs transcribes its own recordings; the global client here (`dictate', on
 Ctrl-Cmd-L) transcribes and pastes into whatever app is in front, handing
 over to Emacs's voice-dictate when Emacs is. Both go through the same learned
-corrections (`correct', `remember'), kept in ~/.local/share/voice/.
+corrections (`correct', `remember'), kept in ~/.local/share/voice/, and
+dictation carries out spoken markers (\"new line\", \"question mark\",
+\"stop dictation\"; `markers').
 `correct-dictation' fixes a word of the last global dictation in place (via
 Accessibility; else it copies the fixed text) and remembers the fix.
 
@@ -332,6 +334,13 @@ curl task, or nil if it couldn't start."
         task
         (do (os.remove path) nil))))
 
+(fn markers [text]
+  "TEXT's spoken dictation markers carried out (\"new line\", \"question
+mark\", \"stop dictation\"), as JSON {text, stopped} so that leading and
+trailing newlines survive the trip to Emacs."
+  (let [(text stopped) (vt.markers (or text ""))]
+    (hs.json.encode {: text : stopped})))
+
 (fn transcribe [d path]
   (set d.phase :transcribing)
   (set d.task
@@ -341,7 +350,10 @@ curl task, or nil if it couldn't start."
                             (finish)
                             (if (not text) (say (.. "Voice: transcription failed: " err))
                                 (= text "") (say "Voice: heard nothing")
-                                (deliver d text))))))
+                                (let [text (vt.markers text)]
+                                  (if (= text "")
+                                      (say "Voice: nothing left to type")
+                                      (deliver d text))))))))
   (when (not d.task)
     (finish)
     (say "Voice: couldn't run curl")))
@@ -478,7 +490,7 @@ In Emacs, voice-correct does it instead."
 
 {: start : stop : cancel :ready ready? :recording recording? :enabled enabled?
  : correct : replace : remember : language :set_language set-language : languages
- :transcribe_file transcribe-file : prompt : candidates
+ :transcribe_file transcribe-file : prompt : candidates : markers
  ;; For Emacs, once the transcript of a recording stopped with keep-hud is in.
  :transcribed #(do (hud.done) "ok")
  : dictate :cancel-dictation cancel-dictation :choose-language choose-language
