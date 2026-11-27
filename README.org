@@ -25,6 +25,8 @@ the emoji picker (=Cmd-Ctrl-SPC=), the frontmost app's menu bar and any open men
 status menu items and a visible Dock. Clickable text such as Calendar events is
 included. Transparent overlay windows, like the full-screen one Notification
 Center puts up while an alert is showing, only hide what they actually paint.
+Panels hidden behind other panels are skipped, and alerts macOS keeps above
+every overlay (like "App quit unexpectedly") get their labels beside them.
 Type a label to act on it:
 
 | Key                      | Action                                                    |

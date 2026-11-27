@@ -294,7 +294,7 @@ M-RET hovers.
                 x2 (math.max (+ b.x b.w) (+ frame.x frame.w))]
             (values header {:x x1 :y b.y :w (- x2 x1) :h b.h})))))))
 
-(fn collect-tree [root {: clip : occluders : window} acc budget pick?]
+(fn collect-tree [root {: clip : occluders : window : panel} acc budget pick?]
   "Walk ROOT's accessibility tree and append a candidate to ACC for every
   element satisfying PICK? (default `clickable?`) that is visible: inside CLIP
   (narrowed by each enclosing scroll area) and not entirely under the
@@ -325,7 +325,7 @@ M-RET hovers.
                          ((or pick? clickable?) element role subrole in-row?
                                                 in-web? parent-role))
                 (table.insert acc {: element : role : subrole :frame shown
-                                   : window :web? in-web?})))
+                                   : window : panel :web? in-web?})))
             (when (and pid budget.web-pids (= role :AXWebArea))
               (tset budget.web-pids pid true))
             ;; A menu bar item's menu is only worth walking while it is open.
@@ -426,14 +426,21 @@ M-RET hovers.
           (visit win 0)
           frames))))
 
+(fn window-order []
+  "Window id -> position in the on-screen stacking order, front first."
+  (collect [i info (ipairs (or (hs.window.list true) []))]
+    info.kCGWindowNumber i))
+
 (fn panel-roots [clip]
   "Windows of agent (menu-bar-only) apps, which `hs.window.orderedWindows`
-  leaves out, e.g. the Emoji & Symbols picker and Character Viewer. A popover
-  can extend far past its anchor window, so each panel is clipped to the
-  bounds of its window and popovers. Returns the roots and the frames they
-  cover."
-  (let [roots []
-        frames []]
+  leaves out, e.g. the Emoji & Symbols picker and Character Viewer, and
+  system alerts such as a crash report. A popover can extend far past its
+  anchor window, so each panel is clipped to the bounds of its window and
+  popovers. Panels are taken front to back, each covered by those in front,
+  as alerts pile up in the middle of the screen. Returns the roots and the
+  frames they cover."
+  (let [panels []
+        order (window-order)]
     (each [_ app (ipairs (hs.application.runningApplications))]
       ;; Hammerspoon is an agent app too: skip our own overlays.
       (when (and (= (: app :kind) 0) (not= (: app :pid) hs.processInfo.processID))
@@ -445,12 +452,24 @@ M-RET hovers.
                                        (attr el :AXFrame))]
                         (when frame (table.insert covered frame))))
                   panel-clip (and (> (length covered) 0)
-                                  (intersection clip (bounds covered)))]
+                                  (intersection clip (bounds covered)))
+                  (ok hs-win) (pcall #(: win :asHSWindow))
+                  id (and ok hs-win (: hs-win :id))]
               (when panel-clip
-                (table.insert roots {:element win :clip panel-clip :occluders []})
-                (each [_ frame (ipairs covered)]
-                  (table.insert frames frame))))))))
-    (values roots frames)))
+                (table.insert panels {:element win :clip panel-clip : covered : id
+                                      :rank (or (and id (. order id))
+                                                math.huge)})))))))
+    (table.sort panels #(< $1.rank $2.rank))
+    (let [roots []
+          frames []]
+      (each [_ panel (ipairs panels)]
+        (when (not (any? #(contains? $ panel.clip) frames))
+          (table.insert roots {:element panel.element :clip panel.clip
+                               :occluders (icollect [_ f (ipairs frames)] f)
+                               :panel {:id panel.id :frame panel.clip}}))
+        (each [_ frame (ipairs panel.covered)]
+          (table.insert frames frame)))
+      (values roots frames))))
 
 (fn hidden-bar-frame [frame]
   "Where FRAME, a status item's, shows once its menu bar does, if the menu bar
@@ -1030,6 +1049,42 @@ M-RET hovers.
         y (- (+ f.y (/ f.h 2)) (/ h 2))]
     {: x : y : w : h}))
 
+;; Panels that stay above the hint canvases whatever their level, such as
+;; macOS 26's crash report alert: its frosted glass would blur the labels.
+(fn panels-above []
+  "The ids of the windows stacked above the hint canvases, once shown."
+  (let [own hs.processInfo.processID
+        above {}]
+    (var done? false)
+    (each [_ info (ipairs (or (hs.window.list true) [])) &until done?]
+      (if (and (= info.kCGWindowOwnerPID own)
+               (= info.kCGWindowLayer hs.canvas.windowLevels.overlay))
+          (set done? true)
+          (tset above info.kCGWindowNumber true)))
+    (if done? above {})))
+
+(fn outside-labels [hints above]
+  "Label rects beside the panels in ABOVE for HINTS inside them: left of the
+  panel for elements in its left half, right of it otherwise, side by side
+  where they would overlap."
+  (let [placed {}
+        taken []]
+    (each [_ hint (ipairs hints)]
+      (when (and hint.panel hint.panel.id (. above hint.panel.id))
+        (let [r (label-rect hint)
+              p hint.panel.frame
+              left? (< (+ r.x (/ r.w 2)) (+ p.x (/ p.w 2)))
+              gap 4]
+          (var x (if left? (- p.x gap r.w) (+ p.x p.w gap)))
+          (while (any? #(and (= $.left? left?) (< (math.abs (- $.y r.y)) r.h)
+                             (< (math.abs (- $.x x)) (math.max $.w r.w)))
+                       taken)
+            (set x (if left? (- x r.w gap) (+ x r.w gap))))
+          (let [rect {: x :y r.y :w r.w :h r.h : left?}]
+            (table.insert taken rect)
+            (tset placed hint rect)))))
+    placed))
+
 (fn label-text [label typed]
   (let [text (hs.styledtext.new label
                                 {:font {:name font-name :size font-size}
@@ -1194,6 +1249,7 @@ M-RET hovers.
 
 (fn render []
   (let [visible (visible-hints)
+        outside (outside-labels visible (or state.above {}))
         label-color (or (. palette state.action)
                         (if state.parked? palette.parked palette.bg))]
     (each [_ {: canvas : frame : screen} (ipairs state.canvases)]
@@ -1218,7 +1274,7 @@ M-RET hovers.
                            :strokeColor {:hex label-color}
                            :strokeWidth 3})))
         (each [_ hint (ipairs visible)]
-          (let [r (label-rect hint)]
+          (let [r (or (. outside hint) (label-rect hint))]
             (when (inside? frame (center r))
               (let [local-frame {:x (- r.x frame.x) :y (- r.y frame.y)
                                  :w r.w :h r.h}]
@@ -1242,7 +1298,7 @@ M-RET hovers.
   (icollect [_ screen (ipairs (hs.screen.allScreens))]
     (let [frame (: screen :fullFrame)
           canvas (hs.canvas.new frame)]
-      (: canvas :level hs.canvas.windowLevels.overlay)
+            (: canvas :level hs.canvas.windowLevels.overlay)
       (: canvas :behavior [:canJoinAllSpaces :transient])
       (: canvas :show)
       {: canvas : frame : screen})))
@@ -1622,6 +1678,15 @@ M-RET hovers.
                       :hud-screen (: (hs.screen.mainScreen) :id)
                       :tap (hs.eventtap.new [types.keyDown] on-key)})
           (render)
+          ;; The window server lists the canvases only once they are drawn.
+          (when (any? #$.panel candidates)
+            (let [shown state]
+              (set state.above-timer
+                   (hs.timer.doAfter 0.1
+                                     #(when (= state shown)
+                                        (set state.above (panels-above))
+                                        (when (next state.above)
+                                          (render)))))))
           (: state.tap :start)
           (when (next info.fresh)
             (set state.rescans 0)
