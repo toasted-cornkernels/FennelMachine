@@ -106,14 +106,17 @@
 
 (fn current []
   "The notification peeking in at the top right: the topmost banner, or the
-  topmost alert (alerts stay until dismissed) when no banner is showing."
+  topmost alert (alerts stay until dismissed) when no banner is showing.
+  Several notifications from one app are grouped into a stack, which counts
+  as one notification."
   (let [w (and (not (open?)) (window))
         top-of (fn [elements]
                  (table.sort elements #(< (. (ax $1 :AXFrame) :y)
                                           (. (ax $2 :AXFrame) :y)))
                  (. elements 1))
         of-kind (fn [subrole]
-                  (find-all w #(and (= (ax $1 :AXSubrole) subrole)
+                  (find-all w #(and (let [s (ax $1 :AXSubrole)]
+                                      (or (= s subrole) (= s (.. subrole :Stack))))
                                     (on-screen? $1))))]
     (when w
       (or (top-of (of-kind :AXNotificationCenterBanner))
@@ -126,12 +129,14 @@
         (if n (f n) (minibuffer.message "No notification on screen")))))
 
 (fn clear-current []
-  "Remove the notification peeking in at the top right for good."
+  "Remove the notification peeking in at the top right for good (a whole
+  stack, which has Clear All instead of Close)."
   (with-current
     (fn [n]
-      (let [close (hs.fnutils.find (or (: n :actionNames) [])
-                                   #(or (= $1 :AXClose)
-                                        (= (string.match $1 "^Name:([^\n]*)") :Close)))]
+      (let [named #(= (string.match $1 "^Name:([^\n]*)") $2)
+            actions (or (: n :actionNames) [])
+            close (or (hs.fnutils.find actions #(or (= $1 :AXClose) (named $1 :Close)))
+                      (hs.fnutils.find actions #(named $1 "Clear All")))]
         (if close
             (: n :performAction close)
             (minibuffer.message "This notification can't be closed"))))))
