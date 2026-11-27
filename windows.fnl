@@ -9,6 +9,7 @@
 
 (local {: global-filter} (require :lib.utils))
 (local minibuffer (require :lib.minibuffer))
+(local {: ordered-windows} (require :lib.ordered-windows))
 (local {: atom : deref : swap! : reset!} (require :lib.atom))
 
 (require-macros :lib.advice.macros)
@@ -324,7 +325,7 @@
 (fn screen-windows [screen]
   "The visible standard windows on SCREEN in the current Space, ordered left
   to right, then top to bottom."
-  (let [wins (icollect [_ w (ipairs (hs.window.orderedWindows))]
+  (let [wins (icollect [_ w (ipairs (ordered-windows))]
                (when (and (w:isStandard) (w:isVisible)
                           (= (: (w:screen) :id) (screen:id)))
                  w))]

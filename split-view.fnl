@@ -21,6 +21,7 @@ window shares with a window beside it.
 "
 
 (local minibuffer (require :lib.minibuffer))
+(local {: ordered-windows} (require :lib.ordered-windows))
 (local buffers (require :buffers))
 (local spaces (require :spaces))
 
@@ -376,7 +377,7 @@ window shares with a window beside it.
   "WIN and the window sharing its left or right edge, left one first: its
   Split View partner, or a window tiled beside it."
   (let [f (win:frame)
-        others (icollect [_ w (ipairs (hs.window.orderedWindows))]
+        others (icollect [_ w (ipairs (ordered-windows))]
                  (when (and (not (same? w win)) (w:isStandard) (w:isVisible)
                             (= (: (w:screen) :id) (: (win:screen) :id))
                             (vertical-overlap? f (w:frame)))

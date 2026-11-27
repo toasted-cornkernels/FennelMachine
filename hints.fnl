@@ -59,6 +59,7 @@ M-RET hovers.
 
 (local minibuffer (require :lib.minibuffer))
 (local which-key (require :lib.which-key))
+(local {: ordered-windows} (require :lib.ordered-windows))
 
 (local log (hs.logger.new "hints.fnl" "info"))
 (local types hs.eventtap.event.types)
@@ -360,7 +361,7 @@ M-RET hovers.
   and by the FLOATING panel frames."
   (let [roots []
         occluders (icollect [_ o (ipairs floating)] o)]
-    (each [_ win (ipairs (hs.window.orderedWindows))]
+    (each [_ win (ipairs (ordered-windows))]
       (when (< (length roots) max-windows)
         (let [frame (: win :frame)
               clip (on-screen-frame frame)]
@@ -1413,7 +1414,7 @@ M-RET hovers.
     acc))
 
 (fn window-candidates []
-  (icollect [_ win (ipairs (hs.window.orderedWindows))]
+  (icollect [_ win (ipairs (ordered-windows))]
     (let [app (: win :application)
           app-name (or (and app (: app :name)) "")
           title (or (: win :title) "")]
